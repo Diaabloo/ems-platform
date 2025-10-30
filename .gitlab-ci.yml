@@ -1,0 +1,21 @@
+# Defines the steps (here just testing)
+stages:
+  - test
+# The name of the job executed by GitLab
+test_job:
+  # Commands executed in the pipeline
+  stage: test
+  script:
+    - echo "CI/CD pipeline started!"
+    - echo "Installing backend dependencies..."
+    - cd backend
+    - npm install
+    - echo "Backend ready!"
+    - cd ..
+    - echo "Installing frontend dependencies..."
+    - cd frontend
+    - npm install
+    - echo "Frontend ready !"
+  # Launch the pipeline only when you push to the dev branch
+  only:
+    - dev
