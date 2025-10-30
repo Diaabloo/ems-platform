@@ -1,3 +1,5 @@
+# Utilise Node.js version 20 (ajuste selon ton besoin)
+image: node:20
 # Defines the steps (here just testing)
 stages:
   - test
