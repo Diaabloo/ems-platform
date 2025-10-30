@@ -6,6 +6,7 @@ image: node:20
 stages:
   - test
   - build
+  - deploy
 
 # ------------------------
 # Job: Test Backend
@@ -41,4 +42,14 @@ build_frontend:
     - npm run build
     - echo "✅ Frontend build complete!"
   only:
-    - dev  # This job runs only on the 'dev' branch
+    - dev
+
+# This job runs only on the 'dev' branch
+# ---------- Deploy on main ----------
+deploy_production:
+  stage: deploy
+  script:
+    - echo "🚀 Deploying to production server..."
+    # Add your deployment commands here
+  only:
+    - main
