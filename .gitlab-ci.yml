@@ -17,8 +17,8 @@ test_backend:
     - echo "🚀 Starting backend tests..."
     # Go to backend folder
     - cd backend
-    # Install dependencies
-    - npm install
+    # Install dependencies ignoring peer conflicts
+    - npm install --legacy-peer-deps
     # Run tests (replace with your actual test command)
     - npm run test || echo "No tests defined"
     - echo "✅ Backend ready!"
@@ -35,8 +35,8 @@ build_frontend:
     - echo "📦 Building frontend..."
     # Go to frontend folder
     - cd client
-    # Install dependencies
-    - npm install
+    # Install dependencies ignoring peer conflicts
+    - npm install --legacy-peer-deps
     # Build the frontend for production
     - npm run build
     - echo "✅ Frontend build complete!"
