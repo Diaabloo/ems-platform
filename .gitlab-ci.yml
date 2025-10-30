@@ -15,9 +15,9 @@ test_job:
     - echo "Backend ready!"
     - cd ..
     - echo "Installing frontend dependencies..."
-    - cd frontend
+    - cd client
     - npm install
-    - echo "Frontend ready !"
+    - echo "Client ready !"
   # Launch the pipeline only when you push to the dev branch
   only:
     - dev
