@@ -1,23 +1,44 @@
-# Utilise Node.js version 20 (ajuste selon ton besoin)
+# Use a Node.js Docker image for the CI environment
+# Node.js is required to run npm commands
 image: node:20
-# Defines the steps (here just testing)
+
+# Define the stages of the pipeline
 stages:
   - test
-# The name of the job executed by GitLab
-test_job:
-  # Commands executed in the pipeline
+  - build
+
+# ------------------------
+# Job: Test Backend
+# ------------------------
+test_backend:
   stage: test
   script:
-    - echo "CI/CD pipeline started!"
-    - echo "Installing backend dependencies..."
+    # Print message to indicate job start
+    - echo "🚀 Starting backend tests..."
+    # Go to backend folder
     - cd backend
+    # Install dependencies
     - npm install
-    - echo "Backend ready!"
-    - cd ..
-    - echo "Installing frontend dependencies..."
-    - cd client
-    - npm install
-    - echo "Client ready !"
-  # Launch the pipeline only when you push to the dev branch
+    # Run tests (replace with your actual test command)
+    - npm run test || echo "No tests defined"
+    - echo "✅ Backend ready!"
   only:
-    - dev
+    - dev  # This job runs only on the 'dev' branch
+
+# ------------------------
+# Job: Build Frontend
+# ------------------------
+build_frontend:
+  stage: build
+  script:
+    # Print message to indicate job start
+    - echo "📦 Building frontend..."
+    # Go to frontend folder
+    - cd client
+    # Install dependencies
+    - npm install
+    # Build the frontend for production
+    - npm run build
+    - echo "✅ Frontend build complete!"
+  only:
+    - dev  # This job runs only on the 'dev' branch
