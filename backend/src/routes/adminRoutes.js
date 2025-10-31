@@ -1,6 +1,6 @@
 import express from 'express';
 import { createAdmin, getAdmins, updateAdmin, deleteAdmin, loginAdmin, verifyAdminCode } from '../services/adminService.js';
-import authMiddleware from '../middlewares/authMiddleware.js';
+import { authMiddleware } from '../middlewares/authMiddleware.js';
 import { createUser } from '../models/userModel.js'; // AJOUTE ÇA
 import prisma from '../config/db.js'; // AJOUTE ÇA
 

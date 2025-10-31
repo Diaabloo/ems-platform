@@ -4,6 +4,7 @@ import cors from 'cors';
 import prisma from './src/config/db.js';
 import adminRouter from './src/routes/adminRoutes.js';
 import employeeRouter from './src/routes/employeeRoutes.js';
+import departmentRoutes from './src/routes/departmentRoutes.js'
 import logger from './src/utils/logger.js';
 
 dotenv.config();
@@ -21,6 +22,7 @@ app.use(cors({
 app.use(express.json());
 app.use('/api/admin', adminRouter);
 app.use('/api/employees', employeeRouter);
+app.use('/api/departments', departmentRoutes)
 
 const PORT = process.env.PORT || 5000;
 

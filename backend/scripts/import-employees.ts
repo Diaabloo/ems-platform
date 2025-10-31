@@ -3,12 +3,14 @@ import { PrismaClient } from '../src/generated/prisma';
 import fs from 'fs';
 import path from 'path';
 import csvParser from 'csv-parser';
+import { fileURLToPath } from 'url';
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
 const prisma = new PrismaClient();
 
 async function main() {
-  const csvPath = 'C:\\Users\\XPS\\Downloads\\company_employees.csv';
-  const backupDir = 'C:\\Users\\XPS\\Desktop\\AGE\\backups';
+const csvPath = path.join('C:\\Users\\XPS\\Downloads\\company_employees.csv');
+const backupDir = path.join(__dirname, '../backups');
 
   // Créer dossier backup
   if (!fs.existsSync(backupDir)) {

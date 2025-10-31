@@ -62,6 +62,7 @@ export interface Department {
   name: string
   description: string
   employeeCount: number
+  color?: string
 }
 
 export interface User {
@@ -94,9 +95,11 @@ interface AppState {
 
   // Departments
   departments: Department[]
-  addDepartment: (department: Omit<Department, "id" | "employeeCount">) => void
-  updateDepartment: (id: string, department: Partial<Department>) => void
-  deleteDepartment: (id: string) => void
+  fetchDepartments: () => Promise<void>
+  addDepartment: (dept: Omit<Department, "id" | "employeeCount"> & { color?: string }) => Promise<void>
+  updateDepartment: (id: string, updates: Partial<Department>) => Promise<void>
+  deleteDepartment: (id: string) => Promise<void>
+
 
   absences: Absence[]
   addAbsence: (absence: Omit<Absence, "id">) => void
@@ -128,12 +131,7 @@ interface AppState {
 // Mock initial data
 const initialEmployees: Employee[] = [];
 
-const initialDepartments: Department[] = [
-  { id: "1", name: "Engineering", description: "Software development and technical operations", employeeCount: 2 },
-  { id: "2", name: "Marketing", description: "Brand management and customer outreach", employeeCount: 1 },
-  { id: "3", name: "Human Resources", description: "Employee relations and talent management", employeeCount: 1 },
-  { id: "4", name: "Finance", description: "Financial planning and analysis", employeeCount: 1 },
-]
+const initialDepartments: Department[] = [];
 
 const initialAbsences: Absence[] = [
   {
@@ -365,25 +363,72 @@ export const useStore = create<AppState>()(
 
       // Departments
       departments: initialDepartments,
-      addDepartment: (department) => {
-        const newDepartment = {
-          ...department,
-          id: Date.now().toString(),
-          employeeCount: 0,
+
+      fetchDepartments: async () => {
+        const token = localStorage.getItem("token")
+        try {
+          const res = await fetch("http://localhost:5000/api/departments", {
+            headers: { Authorization: `Bearer ${token || ""}` }
+          })
+          if (!res.ok) throw new Error("Failed")
+          const json = await res.json()
+          const formatted: Department[] = json.data.map((d: any) => ({
+            id: d.id,
+            name: d.name,
+            description: d.description,
+            employeeCount: d.employeeCount || 0,
+            color: d.color
+          }))
+          set({ departments: formatted })
+        } catch (err) {
+          console.error("Fetch departments error:", err)
         }
-        set((state) => ({
-          departments: [...state.departments, newDepartment],
-        }))
       },
-      updateDepartment: (id, updates) => {
-        set((state) => ({
-          departments: state.departments.map((dept) => (dept.id === id ? { ...dept, ...updates } : dept)),
-        }))
+
+      addDepartment: async (dept) => {
+        const token = localStorage.getItem("token")
+        const res = await fetch("http://localhost:5000/api/departments", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${token || ""}`
+          },
+          body: JSON.stringify(dept)
+        })
+        if (res.ok) {
+          const json = await res.json()
+          set(state => ({
+            departments: [...state.departments, { ...dept, id: json.data.id, employeeCount: 0 }]
+          }))
+        }
       },
-      deleteDepartment: (id) => {
-        set((state) => ({
-          departments: state.departments.filter((dept) => dept.id !== id),
-        }))
+
+      updateDepartment: async (id, updates) => {
+        const token = localStorage.getItem("token")
+        const res = await fetch(`http://localhost:5000/api/departments/${id}`, {
+          method: "PUT",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${token || ""}`
+          },
+          body: JSON.stringify(updates)
+        })
+        if (res.ok) {
+          set(state => ({
+            departments: state.departments.map(d => d.id === id ? { ...d, ...updates } : d)
+          }))
+        }
+      },
+
+      deleteDepartment: async (id) => {
+        const token = localStorage.getItem("token")
+        const res = await fetch(`http://localhost:5000/api/departments/${id}`, {
+          method: "DELETE",
+          headers: { Authorization: `Bearer ${token || ""}` }
+        })
+        if (res.ok) {
+          set(state => ({ departments: state.departments.filter(d => d.id !== id) }))
+        }
       },
 
       absences: initialAbsences,
