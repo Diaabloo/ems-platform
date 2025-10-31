@@ -87,12 +87,13 @@ export default function EmployeeDetailPage() {
       return
     }
 
-    const employeeId = Number(params.id) // Convert to number
+    // const employeeId = Number(params.id) // Convert to number
+    const employeeId = params.id as string
     const fetchEmployee = async () => {
       try {
         setLoading(true)
         setError(null)
-        const res = await fetch(`http://localhost:5000/api/employees/${employeeId}`, {
+        const res = await fetch(`http://localhost:5000/api/employees/${employeeId}`,{
           headers: {
             "Content-Type": "application/json",
             Authorization: `Bearer ${localStorage.getItem("token") || ""}`,
@@ -105,7 +106,8 @@ export default function EmployeeDetailPage() {
           fullName: `${json.data.first_name} ${json.data.last_name}`, // Fixed: Use first_name and last_name
           email: json.data.email,
           phone: json.data.phone,
-          department: json.data.department,
+          department: json.data.department?.name || 'Aucun',     // .name
+          departmentColor: json.data.department?.color || '#9ca3af', // .color
           role: json.data.role,
           status: json.data.status ? "Active" : "Inactive",
           hireDate: new Date(json.data.hireDate).toISOString(),

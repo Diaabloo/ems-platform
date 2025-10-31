@@ -20,20 +20,43 @@ model User {
   password        String
   role            String    @default("admin")
   createdAt       DateTime  @default(now())
+
+  @@map("users")
 }
 
 
 model CompanyEmployee {
-  id         String   @id @default(uuid())
-  first_name String
-  last_name  String
-  department String
-  role       String
-  email      String
-  phone      String
-  hireDate   DateTime
-  status     Boolean
-  salary     Int
+  id            String     @id @default(uuid())
+  first_name    String
+  last_name     String
+  full_name     String     @default("") // on peut générer
+  email         String     @unique
+  phone         String?
+  departmentId  String
+  department    Department @relation(fields: [departmentId], references: [id], onDelete: Restrict)
+  role          String
+  salary        Int
+  hireDate      DateTime   @map("hireDate")
+  status        Boolean    @default(true) // true = Active
+  createdAt     DateTime   @default(now())
+  updatedAt     DateTime   @updatedAt
+
+  @@map("employees")
+  @@index([departmentId])
+  @@index([email])
+}
+
+model Department {
+  id          String     @id @default(uuid())
+  name        String     @unique
+  description String?
+  color       String     // ex: #10b981
+  createdAt   DateTime   @default(now())
+  updatedAt   DateTime   @updatedAt
+
+  employees   CompanyEmployee[]
+
+  @@map("departments")
 }
 
 

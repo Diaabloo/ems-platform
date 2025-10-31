@@ -62,7 +62,8 @@ export default function EmployeesPage() {
           fullName: emp.fullName || "Unknown", // Use fullName from API
           email: emp.email,
           phone: emp.phone,
-          department: emp.department,
+          department: emp.department?.name || 'Aucun',
+          departmentColor: emp.department?.color || '#9ca3af',
           role: emp.role,
           status: emp.status, // Already formatted as "Active" or "Inactive" by backend
           hireDate: emp.hireDate,
@@ -206,7 +207,16 @@ export default function EmployeesPage() {
                             </div>
                           </div>
                         </td>
-                        <td className="px-6 py-4 text-sm text-foreground">{employee.department}</td>
+                        {/* <td className="px-6 py-4 text-sm text-foreground">{employee.department}</td> */}
+                        <td className="px-6 py-4 text-sm text-foreground">
+                          <div className="flex items-center gap-1">
+                            <span
+                              className="inline-block m-2 w-3 h-3 rounded-full"
+                              style={{ backgroundColor: employee.departmentColor }}
+                            ></span>
+                            {employee.department}
+                          </div>
+                        </td>
                         <td className="px-6 py-4 text-sm text-foreground">{employee.role}</td>
                         <td className="px-6 py-4">
                           <span

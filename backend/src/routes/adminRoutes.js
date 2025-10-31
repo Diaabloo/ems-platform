@@ -1,8 +1,44 @@
 import express from 'express';
 import { createAdmin, getAdmins, updateAdmin, deleteAdmin, loginAdmin, verifyAdminCode } from '../services/adminService.js';
 import authMiddleware from '../middlewares/authMiddleware.js';
+import { createUser } from '../models/userModel.js'; // AJOUTE ÇA
+import prisma from '../config/db.js'; // AJOUTE ÇA
+
 
 const router = express.Router();
+
+
+// Ajoute ÇA dans ton router existant
+router.post('/create-first-admin', async (req, res) => {
+  const { email, password } = req.body;
+
+  if (!email || !password) {
+    return res.status(400).json({ error: 'Email et mot de passe requis' });
+  }
+
+  try {
+    // Vérifie s’il y a déjà un admin
+    const existing = await prisma.user.findFirst({ where: { role: 'admin' } });
+    if (existing) {
+      return res.status(403).json({ error: 'Un admin existe déjà. Utilise /login' });
+    }
+
+    // Utilise createUser du model
+    const admin = await createUser(email, password, 'admin');
+
+    res.status(201).json({
+      message: 'Premier admin créé avec succès !',
+      email: admin.email,
+      id: admin.id
+    });
+  } catch (err) {
+    console.error('ERREUR CREATE ADMIN:', err); // LOG DÉTAILLÉ
+    res.status(500).json({
+      error: 'Erreur création admin',
+      details: err.message
+    });
+  }
+});
 
 // CRUD Admin (with JWT protect)
 // Login GET(userId, OTP in email)
