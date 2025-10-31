@@ -21,18 +21,36 @@ import {
 
 export default function DepartmentsPage() {
   const router = useRouter()
-  const { isAuthenticated, departments, employees, deleteDepartment } = useStore()
+  const { isAuthenticated, departments, employees, deleteDepartment, fetchDepartments } = useStore()
 
   const [isModalOpen, setIsModalOpen] = useState(false)
   const [editingDepartment, setEditingDepartment] = useState<Department | null>(null)
   const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false)
   const [departmentToDelete, setDepartmentToDelete] = useState<Department | null>(null)
 
+  // useEffect(() => {
+  //   if (!isAuthenticated) {
+  //     router.push("/login")
+  //   }
+  // }, [isAuthenticated, router])
+
   useEffect(() => {
-    if (!isAuthenticated) {
-      router.push("/login")
-    }
-  }, [isAuthenticated, router])
+  if (!isAuthenticated) {
+    router.push("/login")
+    return
+  }
+
+  const controller = new AbortController()
+
+  const load = async () => {
+    // Utilise fetchDepartments directement
+    await fetchDepartments()
+  }
+
+  load()
+
+  return () => controller.abort()
+  }, [isAuthenticated, router, fetchDepartments])
 
   if (!isAuthenticated) return null
 
@@ -64,10 +82,7 @@ export default function DepartmentsPage() {
   }
 
   // Calculate employee count for each department
-  const departmentsWithCount = departments.map((dept) => ({
-    ...dept,
-    employeeCount: employees.filter((emp) => emp.department === dept.name).length,
-  }))
+  const departmentsWithCount = departments
 
   return (
     <div className="flex h-screen bg-background">

@@ -22,6 +22,7 @@ router.get('/', async (req, res) => {
           { email: { contains: search, mode: 'insensitive' } },
         ],
       },
+      include: { department: true },
       orderBy: { first_name: 'asc' },
       skip: skip,
       take: limit,
@@ -81,6 +82,7 @@ router.get('/:id', async (req, res) => {
   try {
     const employee = await prisma.companyEmployee.findUnique({
       where: { id: id }, // Pass id as string
+      include: { department: true }
     });
 
     if (!employee) {
@@ -163,6 +165,7 @@ router.put('/:id', async (req, res) => {
 
     const employee = await prisma.companyEmployee.update({
       where: { id: id }, // Pass id as string
+      include: {department: true},
       data: {
         first_name,
         last_name: last_name || '',
