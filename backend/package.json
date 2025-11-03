@@ -7,6 +7,7 @@
     "test": "echo \"Error: no test specified\" && exit 1",
     "start": "node index.js",
     "dev": "nodemon index.js",
+    "migrate": "prisma migrate deploy",
     "import:employees": "tsx scripts/import-employees.ts",
     "backup": "pg_dump -h localhost -p 5432 -U postgres -d employeedb > C:\\Users\\XPS\\Desktop\\AGE\\backups\\full_backup_$(date +%Y-%m-%d).sql"
   },
@@ -15,7 +16,7 @@
   "license": "ISC",
   "type": "module",
   "dependencies": {
-    "@prisma/client": "^6.17.1",
+    "@prisma/client": "^6.18.0",
     "@types/express": "^5.0.3",
     "@types/pg": "^8.15.5",
     "bcrypt": "^6.0.0",
