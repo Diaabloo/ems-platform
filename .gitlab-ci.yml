@@ -1,55 +1,173 @@
-# Use a Node.js Docker image for the CI environment
-# Node.js is required to run npm commands
-image: node:20
+# Use Docker image for CI environment with Docker-in-Docker service
+image: docker:24
+services:
+  - docker:dind
 
-# Define the stages of the pipeline
+# Define pipeline stages
 stages:
   - test
   - build
+  - push
   - deploy
+
+# Define variables for Docker images
+variables:
+  DOCKER_HOST: tcp://docker:2375
+  DOCKER_TLS_CERTDIR: ""
+  FRONTEND_IMAGE: $CI_REGISTRY_IMAGE/frontend:$CI_COMMIT_REF_SLUG
+  BACKEND_IMAGE: $CI_REGISTRY_IMAGE/backend:$CI_COMMIT_REF_SLUG
+  DB_IMAGE: $CI_REGISTRY_IMAGE/db:$CI_COMMIT_REF_SLUG
+
+# Global setup for all jobs
+before_script:
+  - docker login -u "$CI_REGISTRY_USER" -p "$CI_REGISTRY_PASSWORD" "$CI_REGISTRY"
 
 # ------------------------
 # Job: Test Backend
 # ------------------------
 test_backend:
   stage: test
+  image: node:20
   script:
-    # Print message to indicate job start
     - echo "🚀 Starting backend tests..."
-    # Go to backend folder
     - cd backend
-    # Install dependencies ignoring peer conflicts
     - npm install --legacy-peer-deps
-    # Run tests (replace with your actual test command)
     - npm run test || echo "No tests defined"
-    - echo "✅ Backend ready!"
+    - echo "✅ Backend tests complete!"
   only:
-    - dev  # This job runs only on the 'dev' branch
+    - dev
+  artifacts:
+    reports:
+      junit: backend/test-results.xml
+  allow_failure: true
 
 # ------------------------
-# Job: Build Frontend
+# Job: Test Frontend
+# ------------------------
+test_frontend:
+  stage: test
+  image: node:20
+  script:
+    - echo "🚀 Starting frontend tests..."
+    - cd client
+    - npm install --legacy-peer-deps
+    - npm run test || echo "No tests defined"
+    - echo "✅ Frontend tests complete!"
+  only:
+    - dev
+  artifacts:
+    reports:
+      junit: client/test-results.xml
+  allow_failure: true
+
+# ------------------------
+# Job: Build Frontend Docker Image
 # ------------------------
 build_frontend:
   stage: build
   script:
-    # Print message to indicate job start
-    - echo "📦 Building frontend..."
-    # Go to frontend folder
+    - echo "📦 Building frontend Docker image..."
     - cd client
-    # Install dependencies ignoring peer conflicts
-    - npm install --legacy-peer-deps
-    # Build the frontend for production
-    - npm run build
-    - echo "✅ Frontend build complete!"
+    - docker build -f Dockerfile -t "$FRONTEND_IMAGE" .
+    - echo "✅ Frontend Docker image built!"
+  only:
+    - dev
+  needs:
+    - test_frontend
+
+# ------------------------
+# Job: Build Backend Docker Image
+# ------------------------
+build_backend:
+  stage: build
+  script:
+    - echo "📦 Building backend Docker image..."
+    - cd backend
+    - docker build -f Dockerfile -t "$BACKEND_IMAGE" .
+    - echo "✅ Backend Docker image built!"
+  only:
+    - dev
+  needs:
+    - test_backend
+
+# ------------------------
+# Job: Build Database Docker Image
+# ------------------------
+build_db:
+  stage: build
+  script:
+    - echo "📦 Building database Docker image..."
+    - cd db
+    - docker build -f Dockerfile -t "$DB_IMAGE" .
+    - echo "✅ Database Docker image built!"
   only:
     - dev
 
-# This job runs only on the 'dev' branch
-# ---------- Deploy on main ----------
+# ------------------------
+# Job: Push Docker Images
+# ------------------------
+push_images:
+  stage: push
+  script:
+    - echo "🚀 Pushing Docker images to registry..."
+    - docker push "$FRONTEND_IMAGE"
+    - docker push "$BACKEND_IMAGE"
+    - docker push "$DB_IMAGE"
+    - echo "✅ Docker images pushed!"
+  only:
+    - dev
+  needs:
+    - build_frontend
+    - build_backend
+    - build_db
+
+# ------------------------
+# Job: Deploy to Production
+# ------------------------
 deploy_production:
   stage: deploy
+  image: alpine:3.18
   script:
     - echo "🚀 Deploying to production server..."
-    # Add your deployment commands here
+    - apk add --no-cache openssh-client
+    # Create .env file
+    - |
+      cat << EOF > .env
+      PORT=$PORT
+      DATABASE_URL=$DATABASE_URL
+      EMAIL_USER=$EMAIL_USER
+      EMAIL_PASS=$EMAIL_PASS
+      JWT_SECRET=$JWT_SECRET
+      ALLOW_ADMIN_CREATION=$ALLOW_ADMIN_CREATION
+      NEXT_PUBLIC_API_URL=$NEXT_PUBLIC_API_URL
+      POSTGRES_USER=$POSTGRES_USER
+      POSTGRES_PASSWORD=$POSTGRES_PASSWORD
+      POSTGRES_DB=$POSTGRES_DB
+      EOF
+    # Set up SSH key
+    - echo "$SSH_PRIVATE_KEY" > ssh_key
+    - chmod 600 ssh_key
+    # Copy files to server
+    - scp -i ssh_key -o StrictHostKeyChecking=no docker-compose.yml .env "$DEPLOY_USER@$DEPLOY_HOST:/home/$DEPLOY_USER/"
+    # SSH and deploy
+    - ssh -i ssh_key -o StrictHostKeyChecking=no "$DEPLOY_USER@$DEPLOY_HOST" << 'EOF'
+        export CI_REGISTRY_IMAGE=$CI_REGISTRY_IMAGE
+        export CI_REGISTRY_USER=$CI_REGISTRY_USER
+        export CI_REGISTRY_PASSWORD=$CI_REGISTRY_PASSWORD
+        export FRONTEND_IMAGE=$FRONTEND_IMAGE
+        export BACKEND_IMAGE=$BACKEND_IMAGE
+        export DB_IMAGE=$DB_IMAGE
+        docker login -u "$CI_REGISTRY_USER" -p "$CI_REGISTRY_PASSWORD" "$CI_REGISTRY"
+        docker pull "$FRONTEND_IMAGE"
+        docker pull "$BACKEND_IMAGE"
+        docker pull "$DB_IMAGE"
+        docker-compose -f /home/$DEPLOY_USER/docker-compose.yml up -d
+        docker exec $(docker ps -q -f name=backend) npm run migrate
+        EOF
+    - rm -f ssh_key .env
+    - echo "✅ Deployment complete!"
   only:
     - main
+  when: manual
+  environment:
+    name: production
