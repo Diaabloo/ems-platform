@@ -1,173 +1,214 @@
-# Use Docker image for CI environment with Docker-in-Docker service
-image: docker:24
-services:
-  - docker:dind
-
-# Define pipeline stages
 stages:
   - test
   - build
   - push
-  - deploy
+  # - deploy # Disabled for now, to be enabled when ready
 
-# Define variables for Docker images
 variables:
-  DOCKER_HOST: tcp://docker:2375
   DOCKER_TLS_CERTDIR: ""
-  FRONTEND_IMAGE: $CI_REGISTRY_IMAGE/frontend:$CI_COMMIT_REF_SLUG
-  BACKEND_IMAGE: $CI_REGISTRY_IMAGE/backend:$CI_COMMIT_REF_SLUG
-  DB_IMAGE: $CI_REGISTRY_IMAGE/db:$CI_COMMIT_REF_SLUG
+  FRONTEND_IMAGE: "amineelalami/ems-platform:frontend"
+  BACKEND_IMAGE: "amineelalami/ems-platform:backend"
+  DB_IMAGE: "amineelalami/ems-platform:db"
+  CACHE_DIR: "$CI_PROJECT_DIR/.cache"
+  TAG: "v${CI_PIPELINE_ID}" # Default tag for main, overridden for dev
 
-# Global setup for all jobs
-before_script:
-  - docker login -u "$CI_REGISTRY_USER" -p "$CI_REGISTRY_PASSWORD" "$CI_REGISTRY"
-
-# ------------------------
-# Job: Test Backend
-# ------------------------
-test_backend:
-  stage: test
-  image: node:20
-  script:
-    - echo "🚀 Starting backend tests..."
-    - cd backend
-    - npm install --legacy-peer-deps
-    - npm run test || echo "No tests defined"
-    - echo "✅ Backend tests complete!"
-  only:
-    - dev
-  artifacts:
-    reports:
-      junit: backend/test-results.xml
-  allow_failure: true
+# Cache node_modules to speed up test and build jobs
+cache:
+  key: "${CI_COMMIT_REF_SLUG}"
+  paths:
+    - client/node_modules/
+    - backend/node_modules/
+    - $CACHE_DIR
 
 # ------------------------
-# Job: Test Frontend
+# Test stage: Frontend tests
 # ------------------------
 test_frontend:
-  stage: test
   image: node:20
+  stage: test
   script:
-    - echo "🚀 Starting frontend tests..."
+    - echo "🔍 Running frontend tests..."
     - cd client
-    - npm install --legacy-peer-deps
-    - npm run test || echo "No tests defined"
-    - echo "✅ Frontend tests complete!"
+    - npm ci
+    - npm run lint || true # Run linting, continue if it fails (optional)
+    - npm test || true     # Run tests, continue if it fails (optional)
   only:
     - dev
-  artifacts:
-    reports:
-      junit: client/test-results.xml
-  allow_failure: true
+    - main
 
 # ------------------------
-# Job: Build Frontend Docker Image
+# Test stage: Backend tests
+# ------------------------
+test_backend:
+  image: node:20
+  stage: test
+  script:
+    - echo "🔍 Running backend tests..."
+    - cd backend
+    - npm ci
+    - npm run lint || true # Run linting, continue if it fails (optional)
+    - npm test || true     # Run tests, continue if it fails (optional)
+  only:
+    - dev
+    - main
+
+# ------------------------
+# Build stage: Frontend image
 # ------------------------
 build_frontend:
+  image: docker:24
   stage: build
+  services:
+    - docker:24-dind
   script:
-    - echo "📦 Building frontend Docker image..."
-    - cd client
-    - docker build -f Dockerfile -t "$FRONTEND_IMAGE" .
-    - echo "✅ Frontend Docker image built!"
+    - echo "🏗️ Building frontend Docker image..."
+    - docker build -t $FRONTEND_IMAGE:$CI_COMMIT_SHORT_SHA ./client
   only:
     - dev
-  needs:
-    - test_frontend
+    - main
 
 # ------------------------
-# Job: Build Backend Docker Image
+# Build stage: Backend image
 # ------------------------
 build_backend:
+  image: docker:24
   stage: build
+  services:
+    - docker:24-dind
   script:
-    - echo "📦 Building backend Docker image..."
-    - cd backend
-    - docker build -f Dockerfile -t "$BACKEND_IMAGE" .
-    - echo "✅ Backend Docker image built!"
+    - echo "🏗️ Building backend Docker image..."
+    - docker build -t $BACKEND_IMAGE:$CI_COMMIT_SHORT_SHA ./backend
   only:
     - dev
-  needs:
-    - test_backend
+    - main
 
 # ------------------------
-# Job: Build Database Docker Image
+# Build stage: Database image
 # ------------------------
 build_db:
+  image: docker:24
   stage: build
+  services:
+    - docker:24-dind
   script:
-    - echo "📦 Building database Docker image..."
-    - cd db
-    - docker build -f Dockerfile -t "$DB_IMAGE" .
-    - echo "✅ Database Docker image built!"
+    - echo "🏗️ Building database Docker image..."
+    - docker build -t $DB_IMAGE:$CI_COMMIT_SHORT_SHA ./db
   only:
     - dev
-
-# ------------------------
-# Job: Push Docker Images
-# ------------------------
-push_images:
-  stage: push
-  script:
-    - echo "🚀 Pushing Docker images to registry..."
-    - docker push "$FRONTEND_IMAGE"
-    - docker push "$BACKEND_IMAGE"
-    - docker push "$DB_IMAGE"
-    - echo "✅ Docker images pushed!"
-  only:
-    - dev
-  needs:
-    - build_frontend
-    - build_backend
-    - build_db
-
-# ------------------------
-# Job: Deploy to Production
-# ------------------------
-deploy_production:
-  stage: deploy
-  image: alpine:3.18
-  script:
-    - echo "🚀 Deploying to production server..."
-    - apk add --no-cache openssh-client
-    # Create .env file
-    - |
-      cat << EOF > .env
-      PORT=$PORT
-      DATABASE_URL=$DATABASE_URL
-      EMAIL_USER=$EMAIL_USER
-      EMAIL_PASS=$EMAIL_PASS
-      JWT_SECRET=$JWT_SECRET
-      ALLOW_ADMIN_CREATION=$ALLOW_ADMIN_CREATION
-      NEXT_PUBLIC_API_URL=$NEXT_PUBLIC_API_URL
-      POSTGRES_USER=$POSTGRES_USER
-      POSTGRES_PASSWORD=$POSTGRES_PASSWORD
-      POSTGRES_DB=$POSTGRES_DB
-      EOF
-    # Set up SSH key
-    - echo "$SSH_PRIVATE_KEY" > ssh_key
-    - chmod 600 ssh_key
-    # Copy files to server
-    - scp -i ssh_key -o StrictHostKeyChecking=no docker-compose.yml .env "$DEPLOY_USER@$DEPLOY_HOST:/home/$DEPLOY_USER/"
-    # SSH and deploy
-    - ssh -i ssh_key -o StrictHostKeyChecking=no "$DEPLOY_USER@$DEPLOY_HOST" << 'EOF'
-        export CI_REGISTRY_IMAGE=$CI_REGISTRY_IMAGE
-        export CI_REGISTRY_USER=$CI_REGISTRY_USER
-        export CI_REGISTRY_PASSWORD=$CI_REGISTRY_PASSWORD
-        export FRONTEND_IMAGE=$FRONTEND_IMAGE
-        export BACKEND_IMAGE=$BACKEND_IMAGE
-        export DB_IMAGE=$DB_IMAGE
-        docker login -u "$CI_REGISTRY_USER" -p "$CI_REGISTRY_PASSWORD" "$CI_REGISTRY"
-        docker pull "$FRONTEND_IMAGE"
-        docker pull "$BACKEND_IMAGE"
-        docker pull "$DB_IMAGE"
-        docker-compose -f /home/$DEPLOY_USER/docker-compose.yml up -d
-        docker exec $(docker ps -q -f name=backend) npm run migrate
-        EOF
-    - rm -f ssh_key .env
-    - echo "✅ Deployment complete!"
-  only:
     - main
-  when: manual
-  environment:
-    name: production
+  rules:
+    - changes:
+        - db/Dockerfile
+        - db/**/*
+
+# ------------------------
+# Push stage: Frontend image
+# ------------------------
+push_frontend:
+  image: docker:24
+  stage: push
+  services:
+    - docker:24-dind
+  script:
+    - echo "🔑 Logging in to Docker Hub..."
+    - echo "$DOCKERHUB_TOKEN" | docker login -u "$DOCKERHUB_USERNAME" --password-stdin
+    - echo "📌 Pushing frontend image..."
+    - docker tag $FRONTEND_IMAGE:$CI_COMMIT_SHORT_SHA $FRONTEND_IMAGE:$CI_COMMIT_REF_NAME
+    - docker push $FRONTEND_IMAGE:$CI_COMMIT_REF_NAME
+    - |
+      if [ "$CI_COMMIT_REF_NAME" = "main" ]; then
+        echo "📌 Tagging frontend as v${CI_PIPELINE_ID} for production"
+        docker tag $FRONTEND_IMAGE:$CI_COMMIT_SHORT_SHA $FRONTEND_IMAGE:v${CI_PIPELINE_ID}
+        docker push $FRONTEND_IMAGE:v${CI_PIPELINE_ID}
+      elif [ "$CI_COMMIT_REF_NAME" = "dev" ]; then
+        echo "📌 Tagging frontend as latest for development"
+        docker tag $FRONTEND_IMAGE:$CI_COMMIT_SHORT_SHA $FRONTEND_IMAGE:latest
+        docker push $FRONTEND_IMAGE:latest
+      fi
+  only:
+    - dev
+    - main
+  variables:
+    DOCKERHUB_USERNAME: $DOCKERHUB_USERNAME
+    DOCKERHUB_TOKEN: $DOCKERHUB_TOKEN
+
+# ------------------------
+# Push stage: Backend image
+# ------------------------
+push_backend:
+  image: docker:24
+  stage: push
+  services:
+    - docker:24-dind
+  script:
+    - echo "🔑 Logging in to Docker Hub..."
+    - echo "$DOCKERHUB_TOKEN" | docker login -u "$DOCKERHUB_USERNAME" --password-stdin
+    - echo "📌 Pushing backend image..."
+    - docker tag $BACKEND_IMAGE:$CI_COMMIT_SHORT_SHA $BACKEND_IMAGE:$CI_COMMIT_REF_NAME
+    - docker push $BACKEND_IMAGE:$CI_COMMIT_REF_NAME
+    - |
+      if [ "$CI_COMMIT_REF_NAME" = "main" ]; then
+        echo "📌 Tagging backend as v${CI_PIPELINE_ID} for production"
+        docker tag $BACKEND_IMAGE:$CI_COMMIT_SHORT_SHA $BACKEND_IMAGE:v${CI_PIPELINE_ID}
+        docker push $BACKEND_IMAGE:v${CI_PIPELINE_ID}
+      elif [ "$CI_COMMIT_REF_NAME" = "dev" ]; then
+        echo "📌 Tagging backend as latest for development"
+        docker tag $BACKEND_IMAGE:$CI_COMMIT_SHORT_SHA $BACKEND_IMAGE:latest
+        docker push $BACKEND_IMAGE:latest
+      fi
+  only:
+    - dev
+    - main
+  variables:
+    DOCKERHUB_USERNAME: $DOCKERHUB_USERNAME
+    DOCKERHUB_TOKEN: $DOCKERHUB_TOKEN
+
+# ------------------------
+# Push stage: Database image
+# ------------------------
+push_db:
+  image: docker:24
+  stage: push
+  services:
+    - docker:24-dind
+  script:
+    - echo "🔑 Logging in to Docker Hub..."
+    - echo "$DOCKERHUB_TOKEN" | docker login -u "$DOCKERHUB_USERNAME" --password-stdin
+    - echo "📌 Pushing database image..."
+    - docker tag $DB_IMAGE:$CI_COMMIT_SHORT_SHA $DB_IMAGE:$CI_COMMIT_REF_NAME
+    - docker push $DB_IMAGE:$CI_COMMIT_REF_NAME
+    - |
+      if [ "$CI_COMMIT_REF_NAME" = "main" ]; then
+        echo "📌 Tagging database as v${CI_PIPELINE_ID} for production"
+        docker tag $DB_IMAGE:$CI_COMMIT_SHORT_SHA $DB_IMAGE:v${CI_PIPELINE_ID}
+        docker push $DB_IMAGE:v${CI_PIPELINE_ID}
+      elif [ "$CI_COMMIT_REF_NAME" = "dev" ]; then
+        echo "📌 Tagging database as latest for development"
+        docker tag $DB_IMAGE:$CI_COMMIT_SHORT_SHA $DB_IMAGE:latest
+        docker push $DB_IMAGE:latest
+      fi
+  only:
+    - dev
+    - main
+  rules:
+    - changes:
+        - db/Dockerfile
+        - db/**/*
+  variables:
+    DOCKERHUB_USERNAME: $DOCKERHUB_USERNAME
+    DOCKERHUB_TOKEN: $DOCKERHUB_TOKEN
+
+# ------------------------
+# Deploy stage: Disabled for now
+# ------------------------
+# deploy:
+#   stage: deploy
+#   script:
+#     - echo "🚀 Deploying to production server..."
+#     # Example: SSH to server and run docker-compose
+#     - ssh user@your-server "cd /path/to/project && TAG=v${CI_PIPELINE_ID} docker-compose -f docker-compose.prod.yml pull && docker-compose -f docker-compose.prod.yml up -d"
+#   only:
+#     - main
+#   environment:
+#     name: production
+#     url: https://your-production-url.com
