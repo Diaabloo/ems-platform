@@ -30,8 +30,8 @@ test_frontend:
     - echo "🔍 Running frontend tests..."
     - cd client
     - npm ci
-    - npm run lint || true # Run linting, continue if it fails (optional)
-    - npm test || true     # Run tests, continue if it fails (optional)
+    - npm run lint || true # Run linting, continue if it fails
+    - npm test || true     # Run tests, continue if it fails
   rules:
     - if: '$CI_COMMIT_REF_NAME == "dev" || $CI_COMMIT_REF_NAME == "main"'
 
@@ -45,8 +45,8 @@ test_backend:
     - echo "🔍 Running backend tests..."
     - cd backend
     - npm ci
-    - npm run lint || true # Run linting, continue if it fails (optional)
-    - npm test || true     # Run tests, continue if it fails (optional)
+    - npm run lint || true # Run linting, continue if it fails
+    - npm test || true     # Run tests, continue if it fails
   rules:
     - if: '$CI_COMMIT_REF_NAME == "dev" || $CI_COMMIT_REF_NAME == "main"'
 
