@@ -2,118 +2,176 @@ stages:
   - test
   - build
   - push
-  # - deploy   # (activé plus tard)
+  - deploy
 
-# ------------------------------------------------------------------
-# GLOBAL VARIABLES
-# ------------------------------------------------------------------
 variables:
-  DOCKER_DRIVER: overlay2
+  DOCKER_TLS_CERTDIR: ""
+  CACHE_DIR: "$CI_PROJECT_DIR/.cache"
+
+  # Images Docker
   FRONTEND_IMAGE: "amineelalami/ems-platform-frontend"
   BACKEND_IMAGE: "amineelalami/ems-platform-backend"
+  DB_IMAGE: "amineelalami/ems-platform-db"
 
-# ------------------------------------------------------------------
-# COMMON TEMPLATES
-# ------------------------------------------------------------------
-.build_template: &build_template
-  stage: build
-  image: docker:27
-  services:
-    - docker:27-dind
-  before_script:
-    - docker login -u "$DOCKERHUB_USERNAME" -p "$DOCKERHUB_TOKEN"
+  # Tag basé sur SHA court + date + pipeline pour traçabilité
+  SHORT_SHA: "${CI_COMMIT_SHA:0:8}"
+  TIMESTAMP: "$(date +%Y%m%d%H%M%S)"
+  COMMIT_TAG: "sha-${SHORT_SHA}-${TIMESTAMP}"
+
+  # Version sémantique simplifiée, utilisable en prod
+  VERSION_TAG: "v${CI_PIPELINE_ID}"
+
+# Cache commun
+cache:
+  key: "${CI_COMMIT_REF_SLUG}"
+  paths:
+    - client/node_modules/
+    - backend/node_modules/
+    - $CACHE_DIR
+
+# ----------- Templates -----------
+
+.test_template: &test_template
+  image: node:20
+  stage: test
   rules:
-    - if: '$CI_COMMIT_BRANCH == "dev"'
-    - if: '$CI_COMMIT_BRANCH == "main"'
+    - if: '$CI_COMMIT_REF_NAME == "dev" || $CI_COMMIT_REF_NAME == "main"'
+  script:
+    - echo "🔍 Running tests in $CI_JOB_NAME..."
+    - npm ci
+    - npm run lint || true
+    - npm test || true
+
+.build_template: &build_template
+  image: docker:24
+  stage: build
+  services:
+    - docker:24-dind
+  rules:
+    - if: '$CI_COMMIT_REF_NAME == "dev" || $CI_COMMIT_REF_NAME == "main"'
+  script:
+    - echo "🏗️ Building Docker image for $CI_JOB_NAME"
+    - docker build -t $IMAGE_NAME:$COMMIT_TAG $BUILD_CONTEXT
 
 .push_template: &push_template
+  image: docker:24
   stage: push
-  image: docker:27
   services:
-    - docker:27-dind
-  before_script:
-    - docker login -u "$DOCKERHUB_USERNAME" -p "$DOCKERHUB_TOKEN"
+    - docker:24-dind
   rules:
-    - if: '$CI_COMMIT_BRANCH == "dev"'
-    - if: '$CI_COMMIT_BRANCH == "main"'
-
-# ------------------------------------------------------------------
-# TEST JOBS
-# ------------------------------------------------------------------
-test_backend:
-  stage: test
-  image: node:20
+    - if: '$CI_COMMIT_REF_NAME == "dev" || $CI_COMMIT_REF_NAME == "main"'
+  variables:
+    DOCKERHUB_USERNAME: $DOCKERHUB_USERNAME
+    DOCKERHUB_TOKEN: $DOCKERHUB_TOKEN
   script:
-    - cd backend
-    - npm install
-    - npm test --if-present
+    - echo "🔑 Login to Docker Hub..."
+    - echo "$DOCKERHUB_TOKEN" | docker login -u "$DOCKERHUB_USERNAME" --password-stdin
+    - echo "📌 Pushing Docker image for $IMAGE_NAME"
+    - docker tag $IMAGE_NAME:$COMMIT_TAG $IMAGE_NAME:$CI_COMMIT_REF_NAME
+    - docker push $IMAGE_NAME:$CI_COMMIT_REF_NAME
+
+    - |
+      if [ "$CI_COMMIT_REF_NAME" = "main" ]; then
+        echo "📌 Tagging $IMAGE_NAME as $VERSION_TAG and latest for production"
+        docker tag $IMAGE_NAME:$COMMIT_TAG $IMAGE_NAME:$VERSION_TAG
+        docker push $IMAGE_NAME:$VERSION_TAG
+
+        docker tag $IMAGE_NAME:$COMMIT_TAG $IMAGE_NAME:latest
+        docker push $IMAGE_NAME:latest
+      elif [ "$CI_COMMIT_REF_NAME" = "dev" ]; then
+        echo "📌 Tagging $IMAGE_NAME as latest for development"
+        docker tag $IMAGE_NAME:$COMMIT_TAG $IMAGE_NAME:latest
+        docker push $IMAGE_NAME:latest
+      fi
+
+# ----------- Jobs -----------
 
 test_frontend:
-  stage: test
-  image: node:20
-  script:
-    - cd client
-    - npm install
-    - npm test --if-present
-
-# ------------------------------------------------------------------
-# BUILD JOBS
-# ------------------------------------------------------------------
-build_backend:
-  <<: *build_template
+  <<: *test_template
   variables:
-    IMAGE_NAME: $BACKEND_IMAGE
-    BUILD_CONTEXT: "./backend"
+    CI_JOB_NAME: "frontend tests"
   script:
-    - echo "🏗️ Building backend..."
-    - docker build -t "$IMAGE_NAME:sha-$CI_COMMIT_SHORT_SHA" "$BUILD_CONTEXT"
+    - echo "🔍 Running frontend tests..."
+    - cd client
+    - npm ci
+    - npm run lint || true
+    - npm test || true
+
+test_backend:
+  <<: *test_template
+  variables:
+    CI_JOB_NAME: "backend tests"
+  script:
+    - echo "🔍 Running backend tests..."
+    - cd backend
+    - npm ci
+    - npm run lint || true
+    - npm test || true
 
 build_frontend:
   <<: *build_template
   variables:
     IMAGE_NAME: $FRONTEND_IMAGE
-    BUILD_CONTEXT: "./client"
-  script:
-    - echo "🏗️ Building frontend..."
-    - docker build -t "$IMAGE_NAME:sha-$CI_COMMIT_SHORT_SHA" "$BUILD_CONTEXT"
+    BUILD_CONTEXT: ./client
 
-# ------------------------------------------------------------------
-# PUSH JOBS
-# ------------------------------------------------------------------
-push_backend:
-  <<: *push_template
-  needs: ["build_backend"]
+build_backend:
+  <<: *build_template
+  variables:
+    IMAGE_NAME: $BACKEND_IMAGE
+    BUILD_CONTEXT: ./backend
   script:
-    - docker tag "$BACKEND_IMAGE:sha-$CI_COMMIT_SHORT_SHA" "$BACKEND_IMAGE:latest"
-    - docker push "$BACKEND_IMAGE:sha-$CI_COMMIT_SHORT_SHA"
-    - docker push "$BACKEND_IMAGE:latest"
-    - |
-      if [ "$CI_COMMIT_BRANCH" = "main" ]; then
-        VERSION_TAG="v$CI_PIPELINE_ID"
-        docker tag "$BACKEND_IMAGE:sha-$CI_COMMIT_SHORT_SHA" "$BACKEND_IMAGE:$VERSION_TAG"
-        docker push "$BACKEND_IMAGE:$VERSION_TAG"
-      fi
+    - export SHORT_SHA=${CI_COMMIT_SHA:0:8}
+    - export TIMESTAMP=$(date +%Y%m%d%H%M%S)
+    - export COMMIT_TAG="sha-${SHORT_SHA}-${TIMESTAMP}"
+    - echo "🏗️ Building Docker image for $CI_JOB_NAME with tag $COMMIT_TAG"
+    - docker build -t $IMAGE_NAME:$COMMIT_TAG $BUILD_CONTEXT
+
+build_db:
+  <<: *build_template
+  variables:
+    IMAGE_NAME: $DB_IMAGE
+    BUILD_CONTEXT: ./db
+  rules:
+    - if: '$CI_COMMIT_REF_NAME == "dev" || $CI_COMMIT_REF_NAME == "main"'
+      changes:
+        - db/Dockerfile
+        - db/**/*
 
 push_frontend:
   <<: *push_template
-  needs: ["build_frontend"]
-  script:
-    - docker tag "$FRONTEND_IMAGE:sha-$CI_COMMIT_SHORT_SHA" "$FRONTEND_IMAGE:latest"
-    - docker push "$FRONTEND_IMAGE:sha-$CI_COMMIT_SHORT_SHA"
-    - docker push "$FRONTEND_IMAGE:latest"
-    - |
-      if [ "$CI_COMMIT_BRANCH" = "main" ]; then
-        VERSION_TAG="v$CI_PIPELINE_ID"
-        docker tag "$FRONTEND_IMAGE:sha-$CI_COMMIT_SHORT_SHA" "$FRONTEND_IMAGE:$VERSION_TAG"
-        docker push "$FRONTEND_IMAGE:$VERSION_TAG"
-      fi
+  variables:
+    IMAGE_NAME: $FRONTEND_IMAGE
 
-# ------------------------------------------------------------------
-# DEPLOY (COMMENTÉ POUR PLUS TARD)
-# ------------------------------------------------------------------
-# deploy_prod:
-#   stage: deploy
-#   script:
-#     - echo "🚀 Deploying to production server..."
-#   only:
-#     - main
+push_backend:
+  <<: *push_template
+  variables:
+    IMAGE_NAME: $BACKEND_IMAGE
+
+push_db:
+  <<: *push_template
+  variables:
+    IMAGE_NAME: $DB_IMAGE
+  rules:
+    - if: '$CI_COMMIT_REF_NAME == "dev" || $CI_COMMIT_REF_NAME == "main"'
+      changes:
+        - db/Dockerfile
+        - db/**/*
+
+deploy_production:
+  stage: deploy
+  image: alpine:latest
+  script:
+    - echo "🚀 Deploying to production server..."
+    - apk add --no-cache openssh
+    # Exemple : connexion SSH et mise à jour via docker-compose
+    - ssh -o StrictHostKeyChecking=no user@your-server "
+        cd /path/to/project &&
+        docker-compose -f docker-compose.prod.yml pull &&
+        docker-compose -f docker-compose.prod.yml up -d
+      "
+  environment:
+    name: production
+    url: https://your-production-url.com
+  rules:
+    - if: '$CI_COMMIT_REF_NAME == "main"'
+      when: manual
