@@ -32,9 +32,8 @@ test_frontend:
     - npm ci
     - npm run lint || true # Run linting, continue if it fails (optional)
     - npm test || true     # Run tests, continue if it fails (optional)
-  only:
-    - dev
-    - main
+  rules:
+    - if: '$CI_COMMIT_REF_NAME == "dev" || $CI_COMMIT_REF_NAME == "main"'
 
 # ------------------------
 # Test stage: Backend tests
@@ -48,9 +47,8 @@ test_backend:
     - npm ci
     - npm run lint || true # Run linting, continue if it fails (optional)
     - npm test || true     # Run tests, continue if it fails (optional)
-  only:
-    - dev
-    - main
+  rules:
+    - if: '$CI_COMMIT_REF_NAME == "dev" || $CI_COMMIT_REF_NAME == "main"'
 
 # ------------------------
 # Build stage: Frontend image
@@ -63,9 +61,8 @@ build_frontend:
   script:
     - echo "🏗️ Building frontend Docker image..."
     - docker build -t $FRONTEND_IMAGE:$CI_COMMIT_SHORT_SHA ./client
-  only:
-    - dev
-    - main
+  rules:
+    - if: '$CI_COMMIT_REF_NAME == "dev" || $CI_COMMIT_REF_NAME == "main"'
 
 # ------------------------
 # Build stage: Backend image
@@ -78,9 +75,8 @@ build_backend:
   script:
     - echo "🏗️ Building backend Docker image..."
     - docker build -t $BACKEND_IMAGE:$CI_COMMIT_SHORT_SHA ./backend
-  only:
-    - dev
-    - main
+  rules:
+    - if: '$CI_COMMIT_REF_NAME == "dev" || $CI_COMMIT_REF_NAME == "main"'
 
 # ------------------------
 # Build stage: Database image
@@ -93,11 +89,9 @@ build_db:
   script:
     - echo "🏗️ Building database Docker image..."
     - docker build -t $DB_IMAGE:$CI_COMMIT_SHORT_SHA ./db
-  only:
-    - dev
-    - main
   rules:
-    - changes:
+    - if: '$CI_COMMIT_REF_NAME == "dev" || $CI_COMMIT_REF_NAME == "main"'
+      changes:
         - db/Dockerfile
         - db/**/*
 
@@ -125,9 +119,8 @@ push_frontend:
         docker tag $FRONTEND_IMAGE:$CI_COMMIT_SHORT_SHA $FRONTEND_IMAGE:latest
         docker push $FRONTEND_IMAGE:latest
       fi
-  only:
-    - dev
-    - main
+  rules:
+    - if: '$CI_COMMIT_REF_NAME == "dev" || $CI_COMMIT_REF_NAME == "main"'
   variables:
     DOCKERHUB_USERNAME: $DOCKERHUB_USERNAME
     DOCKERHUB_TOKEN: $DOCKERHUB_TOKEN
@@ -156,9 +149,8 @@ push_backend:
         docker tag $BACKEND_IMAGE:$CI_COMMIT_SHORT_SHA $BACKEND_IMAGE:latest
         docker push $BACKEND_IMAGE:latest
       fi
-  only:
-    - dev
-    - main
+  rules:
+    - if: '$CI_COMMIT_REF_NAME == "dev" || $CI_COMMIT_REF_NAME == "main"'
   variables:
     DOCKERHUB_USERNAME: $DOCKERHUB_USERNAME
     DOCKERHUB_TOKEN: $DOCKERHUB_TOKEN
@@ -187,11 +179,9 @@ push_db:
         docker tag $DB_IMAGE:$CI_COMMIT_SHORT_SHA $DB_IMAGE:latest
         docker push $DB_IMAGE:latest
       fi
-  only:
-    - dev
-    - main
   rules:
-    - changes:
+    - if: '$CI_COMMIT_REF_NAME == "dev" || $CI_COMMIT_REF_NAME == "main"'
+      changes:
         - db/Dockerfile
         - db/**/*
   variables:
@@ -207,8 +197,8 @@ push_db:
 #     - echo "🚀 Deploying to production server..."
 #     # Example: SSH to server and run docker-compose
 #     - ssh user@your-server "cd /path/to/project && TAG=v${CI_PIPELINE_ID} docker-compose -f docker-compose.prod.yml pull && docker-compose -f docker-compose.prod.yml up -d"
-#   only:
-#     - main
+#   rules:
+#     - if: '$CI_COMMIT_REF_NAME == "main"'
 #   environment:
 #     name: production
 #     url: https://your-production-url.com
