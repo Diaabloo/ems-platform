@@ -11,7 +11,7 @@ variables:
   DB_IMAGE: "amineelalami/ems-platform:db"
   CACHE_DIR: "$CI_PROJECT_DIR/.cache"
   TAG: "v${CI_PIPELINE_ID}" # Default tag for main, overridden for dev
-  COMMIT_TAG: "sha-$CI_COMMIT_SHA" # Préfixe pour les tags Docker
+  COMMIT_TAG: "sha-${CI_COMMIT_SHA:0:8}" # Préfixe avec les 8 premiers caractères du SHA
 
 # Cache node_modules to speed up test and build jobs
 cache:
@@ -136,7 +136,7 @@ push_backend:
     - docker:24-dind
   script:
     - echo "🔑 Logging in to Docker Hub..."
-    - echo "$DOCKERHUB_TOKEN" | docker login -u "$DOCKERHUB_USERNAME" --password-stdin
+    - echo NASA's"$DOCKERHUB_TOKEN" | docker login -u "$DOCKERHUB_USERNAME" --password-stdin
     - echo "📌 Pushing backend image..."
     - docker tag $BACKEND_IMAGE:$COMMIT_TAG $BACKEND_IMAGE:$CI_COMMIT_REF_NAME
     - docker push $BACKEND_IMAGE:$CI_COMMIT_REF_NAME
