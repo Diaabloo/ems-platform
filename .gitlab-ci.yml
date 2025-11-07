@@ -75,8 +75,8 @@ push_frontend:
   services:
     - docker:24-dind
   script:
-    - echo "Docker Username: '$DOCKERHUB_USERNAME'"
-    - echo "Docker Token length: ${#DOCKERHUB_TOKEN}"
+    - echo Docker Username: $DOCKERHUB_USERNAME
+    - echo Docker Token length: ${#DOCKERHUB_TOKEN}
     - echo "$DOCKERHUB_TOKEN" | docker login -u "$DOCKERHUB_USERNAME" --password-stdin
     - docker push $FRONTEND_IMAGE:$COMMIT_TAG
     - docker tag $FRONTEND_IMAGE:$COMMIT_TAG $FRONTEND_IMAGE:$CI_COMMIT_REF_NAME
