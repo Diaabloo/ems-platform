@@ -7,21 +7,14 @@ stages:
 variables:
   DOCKER_TLS_CERTDIR: ""
   CACHE_DIR: "$CI_PROJECT_DIR/.cache"
-
-  # ✅ Les vraies images Docker Hub (ne surtout pas commenter ces lignes)
   FRONTEND_IMAGE: "amineelalami/ems-platform:frontend"
   BACKEND_IMAGE: "amineelalami/ems-platform:backend"
   DB_IMAGE: "amineelalami/ems-platform:db"
-
-  # Tag basé sur SHA court + date + pipeline pour traçabilité
   SHORT_SHA: "${CI_COMMIT_SHA:0:8}"
   TIMESTAMP: "$(date +%Y%m%d%H%M%S)"
   COMMIT_TAG: "sha-${SHORT_SHA}-${TIMESTAMP}"
-
-  # Version sémantique simplifiée, utilisable en prod
   VERSION_TAG: "v${CI_PIPELINE_ID}"
 
-# Cache commun
 cache:
   key: "${CI_COMMIT_REF_SLUG}"
   paths:
@@ -30,14 +23,13 @@ cache:
     - $CACHE_DIR
 
 # ----------- Templates -----------
-
 .test_template: &test_template
   image: node:20
   stage: test
   rules:
     - if: '$CI_COMMIT_REF_NAME == "dev" || $CI_COMMIT_REF_NAME == "main"'
   script:
-    - echo "🔍 Running tests in $CI_JOB_NAME..."
+    - cd $APP_DIR
     - npm ci
     - npm run lint || true
     - npm test || true
@@ -54,7 +46,6 @@ cache:
     - export TIMESTAMP=$(date +%Y%m%d%H%M%S)
     - export COMMIT_TAG="sha-${SHORT_SHA}-${TIMESTAMP}"
     - echo "🏗️ Building $IMAGE_NAME:$COMMIT_TAG"
-    # ⚠️ Ces variables seront redéfinies dans chaque job build_*
     - docker build -t "$IMAGE_NAME:$COMMIT_TAG" "$BUILD_CONTEXT"
 
 .push_template: &push_template
@@ -85,57 +76,32 @@ cache:
       fi
 
 # ----------- Jobs -----------
-
 test_frontend:
   <<: *test_template
   variables:
-    CI_JOB_NAME: "frontend tests"
-  script:
-    - echo "🔍 Running frontend tests..."
-    - cd client
-    - npm ci
-    - npm run lint || true
-    - npm test || true
+    APP_DIR: client
 
 test_backend:
   <<: *test_template
   variables:
-    CI_JOB_NAME: "backend tests"
-  script:
-    - echo "🔍 Running backend tests..."
-    - cd backend
-    - npm ci
-    - npm run lint || true
-    - npm test || true
+    APP_DIR: backend
 
 build_frontend:
   <<: *build_template
   variables:
-    IMAGE_NAME: $FRONTEND_IMAGE  # ✅ tag correct
+    IMAGE_NAME: $FRONTEND_IMAGE
     BUILD_CONTEXT: ./client
-  script:
-    - export SHORT_SHA=${CI_COMMIT_SHA:0:8}
-    - export TIMESTAMP=$(date +%Y%m%d%H%M%S)
-    - export COMMIT_TAG="sha-${SHORT_SHA}-${TIMESTAMP}"
-    - echo "🏗️ Building $IMAGE_NAME:$COMMIT_TAG"
-    - docker build -t "$IMAGE_NAME-$COMMIT_TAG" "./client"  # ✅ corrigé pour format valide
 
 build_backend:
   <<: *build_template
   variables:
-    IMAGE_NAME: $BACKEND_IMAGE  # ✅ tag correct
+    IMAGE_NAME: $BACKEND_IMAGE
     BUILD_CONTEXT: ./backend
-  script:
-    - export SHORT_SHA=${CI_COMMIT_SHA:0:8}
-    - export TIMESTAMP=$(date +%Y%m%d%H%M%S)
-    - export COMMIT_TAG="sha-${SHORT_SHA}-${TIMESTAMP}"
-    - echo "🏗️ Building Docker image for backend with tag $COMMIT_TAG"
-    - docker build -t "$IMAGE_NAME-$COMMIT_TAG" "$BUILD_CONTEXT"  # ✅ corrigé pour éviter double ‘:’
 
 build_db:
   <<: *build_template
   variables:
-    IMAGE_NAME: $DB_IMAGE  # ✅ tag correct
+    IMAGE_NAME: $DB_IMAGE
     BUILD_CONTEXT: ./db
   rules:
     - if: '$CI_COMMIT_REF_NAME == "dev" || $CI_COMMIT_REF_NAME == "main"'
@@ -146,17 +112,20 @@ build_db:
 push_frontend:
   <<: *push_template
   variables:
-    IMAGE_NAME: "amineelalami/ems-platform:frontend"
+    IMAGE_NAME: $FRONTEND_IMAGE
+  needs: ["build_frontend"]
 
 push_backend:
   <<: *push_template
   variables:
-    IMAGE_NAME: "amineelalami/ems-platform:backend"
+    IMAGE_NAME: $BACKEND_IMAGE
+  needs: ["build_backend"]
 
 push_db:
   <<: *push_template
   variables:
-    IMAGE_NAME: "amineelalami/ems-platform:db"
+    IMAGE_NAME: $DB_IMAGE
+  needs: ["build_db"]
   rules:
     - if: '$CI_COMMIT_REF_NAME == "dev" || $CI_COMMIT_REF_NAME == "main"'
       changes:
@@ -167,17 +136,14 @@ deploy_production:
   stage: deploy
   image: alpine:latest
   script:
-    - echo "🚀 Deploying to production server..."
-    - apk add --no-cache openssh
-    # Exemple : connexion SSH et mise à jour via docker-compose
+    - apk add --no-cache openssh-client
     - ssh -o StrictHostKeyChecking=no $DEPLOY_USER@$DEPLOY_HOST "
         cd /path/to/project &&
+        export TAG=latest &&
         docker-compose -f docker-compose.prod.yml pull &&
         docker-compose -f docker-compose.prod.yml up -d
       "
-  environment:
-    name: production
-    url: https://your-production-url.com
+  environment: production
   rules:
     - if: '$CI_COMMIT_REF_NAME == "main"'
       when: manual
