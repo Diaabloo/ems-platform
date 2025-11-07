@@ -91,7 +91,11 @@ push_backend:
     DOCKER_TLS_CERTDIR: ""
   script:
     - echo "Docker username: $DOCKERHUB_USERNAME"
-    - if [ -z "$DOCKERHUB_TOKEN" ]; then echo "DOCKERHUB_TOKEN is empty"; exit 1; fi
+    - |
+      if [ -z "$DOCKERHUB_TOKEN" ]; then
+        echo "DOCKERHUB_TOKEN is empty"
+        exit 1
+      fi
     - echo "$DOCKERHUB_TOKEN" | docker login -u "$DOCKERHUB_USERNAME" --password-stdin
     - docker push $BACKEND_IMAGE:$COMMIT_TAG
     - docker tag $BACKEND_IMAGE:$COMMIT_TAG $BACKEND_IMAGE:$CI_COMMIT_REF_NAME
