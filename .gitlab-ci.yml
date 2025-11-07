@@ -9,9 +9,10 @@ variables:
   CACHE_DIR: "$CI_PROJECT_DIR/.cache"
 
   # Images Docker
-  FRONTEND_IMAGE: "amineelalami/ems-platform:frontend"
-  BACKEND_IMAGE: "amineelalami/ems-platform:backend"
-  DB_IMAGE: "amineelalami/ems-platform:db"
+  # FRONTEND_IMAGE: "amineelalami/ems-platform-frontend"
+  # BACKEND_IMAGE: "amineelalami/ems-platform-backend"
+  # DB_IMAGE: "amineelalami/ems-platform-db"
+  BASE_IMAGE: "amineelalami/ems-platform"
 
   # Tag basé sur SHA court + date + pipeline pour traçabilité
   SHORT_SHA: "${CI_COMMIT_SHA:0:8}"
@@ -163,6 +164,26 @@ push_db:
       changes:
         - db/Dockerfile
         - db/**/*
+
+deploy_production:
+  stage: deploy
+  image: alpine:latest
+  script:
+    - echo "🚀 Deploying to production server..."
+    - apk add --no-cache openssh
+    # Exemple : connexion SSH et mise à jour via docker-compose
+    - ssh -o StrictHostKeyChecking=no user@your-server "
+        cd /path/to/project &&
+        docker-compose -f docker-compose.prod.yml pull &&
+        docker-compose -f docker-compose.prod.yml up -d
+      "
+  environment:
+    name: production
+    url: https://your-production-url.com
+  rules:
+    - if: '$CI_COMMIT_REF_NAME == "main"'
+      when: manual
+
 
 deploy_production:
   stage: deploy
