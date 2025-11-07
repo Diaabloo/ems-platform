@@ -75,7 +75,7 @@ cache:
         docker tag $IMAGE_NAME:$COMMIT_TAG $IMAGE_NAME:$VERSION_TAG
         docker push $IMAGE_NAME:$VERSION_TAG
         docker tag $IMAGE_NAME:$COMMIT_TAG $IMAGE_NAME:latest
-        docker push $IMAGE_NAME:$VERSION_TAG
+        docker push $IMAGE_NAME:latest
       elif [ "$CI_COMMIT_REF_NAME" = "dev" ]; then
         echo "📌 Tagging $IMAGE_NAME as latest for development"
         docker tag $IMAGE_NAME:$COMMIT_TAG $IMAGE_NAME:latest
@@ -105,6 +105,28 @@ test_backend:
     - npm ci
     - npm run lint || true
     - npm test || true
+
+test_db:
+  image: docker:24
+  stage: test
+  services:
+    - docker:24-dind
+  variables:
+    CI_JOB_NAME: "database tests"
+  rules:
+    - if: '$CI_COMMIT_REF_NAME == "dev" || $CI_COMMIT_REF_NAME == "main"'
+      changes:
+        - db/Dockerfile
+        - db/**/*
+  script:
+    - echo "🔍 Running database tests..."
+    - export SHORT_SHA=${CI_COMMIT_SHA:0:8}
+    - export TIMESTAMP=$(date +%Y%m%d%H%M%S)
+    - export COMMIT_TAG="sha-${SHORT_SHA}-${TIMESTAMP}"
+    - echo "🏗️ Building $DB_IMAGE:$COMMIT_TAG for testing..."
+    - docker build -t "$DB_IMAGE:$COMMIT_TAG" "./db"
+    - echo "🔍 Testing database initialization..."
+    - docker run --rm -e POSTGRES_USER=$POSTGRES_USER -e POSTGRES_PASSWORD=$POSTGRES_PASSWORD $DB_IMAGE:$COMMIT_TAG pg_isready -U $POSTGRES_USER
 
 build_frontend:
   <<: *build_template
