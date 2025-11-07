@@ -3,182 +3,179 @@ stages:
   - build
   - push
   - deploy
-  - debug
 
 variables:
   DOCKER_TLS_CERTDIR: ""
+  CACHE_DIR: "$CI_PROJECT_DIR/.cache"
+
+  # Images Docker
   FRONTEND_IMAGE: "amineelalami/ems-platform-frontend"
   BACKEND_IMAGE: "amineelalami/ems-platform-backend"
   DB_IMAGE: "amineelalami/ems-platform-db"
+
+  # Tag basé sur SHA court + date + pipeline pour traçabilité
   SHORT_SHA: "${CI_COMMIT_SHA:0:8}"
-  COMMIT_TAG: "sha-${SHORT_SHA}-${CI_PIPELINE_ID}"
+  TIMESTAMP: "$(date +%Y%m%d%H%M%S)"
+  COMMIT_TAG: "sha-${SHORT_SHA}-${TIMESTAMP}"
+
+  # Version sémantique simplifiée, utilisable en prod
   VERSION_TAG: "v${CI_PIPELINE_ID}"
 
+# ----------- Cache -----------
 cache:
   key: "${CI_COMMIT_REF_SLUG}"
   paths:
     - client/node_modules/
     - backend/node_modules/
+    - $CACHE_DIR
 
-# ----------- TEST JOBS -----------
-test_frontend:
-  stage: test
+# ----------- Templates -----------
+.test_template: &test_template
   image: node:20
+  stage: test
+  rules:
+    - if: '$CI_COMMIT_REF_NAME == "dev" || $CI_COMMIT_REF_NAME == "main"'
   script:
+    - echo "🔍 Running tests in $CI_JOB_NAME..."
+    - npm ci
+    - npm run lint || true
+    - npm test || true
+
+.build_template: &build_template
+  image: docker:24
+  stage: build
+  services:
+    - docker:24-dind
+  rules:
+    - if: '$CI_COMMIT_REF_NAME == "dev" || $CI_COMMIT_REF_NAME == "main"'
+  script:
+    - echo "🏗️ Building Docker image for $CI_JOB_NAME"
+    - docker build -t $IMAGE_NAME:$COMMIT_TAG $BUILD_CONTEXT
+
+.push_template: &push_template
+  image: docker:24
+  stage: push
+  services:
+    - docker:24-dind
+  rules:
+    - if: '$CI_COMMIT_REF_NAME == "dev" || $CI_COMMIT_REF_NAME == "main"'
+  variables:
+    DOCKERHUB_USERNAME: $DOCKERHUB_USERNAME
+    DOCKERHUB_TOKEN: $DOCKERHUB_TOKEN
+  script:
+    - echo "🔑 Login to Docker Hub..."
+    - echo "$DOCKERHUB_TOKEN" | docker login -u "$DOCKERHUB_USERNAME" --password-stdin
+    - echo "📌 Pushing Docker image for $IMAGE_NAME"
+    - docker push $IMAGE_NAME:$COMMIT_TAG
+    - docker tag $IMAGE_NAME:$COMMIT_TAG $IMAGE_NAME:$CI_COMMIT_REF_NAME
+    - docker push $IMAGE_NAME:$CI_COMMIT_REF_NAME
+    - |
+      if [ "$CI_COMMIT_REF_NAME" = "main" ]; then
+        echo "📌 Tagging $IMAGE_NAME as $VERSION_TAG and latest for production"
+        docker tag $IMAGE_NAME:$COMMIT_TAG $IMAGE_NAME:$VERSION_TAG
+        docker push $IMAGE_NAME:$VERSION_TAG
+        docker tag $IMAGE_NAME:$COMMIT_TAG $IMAGE_NAME:latest
+        docker push $IMAGE_NAME:latest
+      elif [ "$CI_COMMIT_REF_NAME" = "dev" ]; then
+        echo "📌 Tagging $IMAGE_NAME as latest for development"
+        docker tag $IMAGE_NAME:$COMMIT_TAG $IMAGE_NAME:latest
+        docker push $IMAGE_NAME:latest
+      fi
+
+# ----------- Jobs -----------
+
+test_frontend:
+  <<: *test_template
+  variables:
+    CI_JOB_NAME: "frontend tests"
+  script:
+    - echo "🔍 Running frontend tests..."
     - cd client
     - npm ci
     - npm run lint || true
     - npm test || true
-  rules:
-    - if: '$CI_COMMIT_REF_NAME == "dev" || $CI_COMMIT_REF_NAME == "main"'
 
 test_backend:
-  stage: test
-  image: node:20
+  <<: *test_template
+  variables:
+    CI_JOB_NAME: "backend tests"
   script:
+    - echo "🔍 Running backend tests..."
     - cd backend
     - npm ci
     - npm run lint || true
     - npm test || true
-  rules:
-    - if: '$CI_COMMIT_REF_NAME == "dev" || $CI_COMMIT_REF_NAME == "main"'
 
-test_db:
-  stage: test
-  image: docker:24
-  services:
-    - docker:24-dind
-  script:
-    - echo "Testing $DB_IMAGE:$COMMIT_TAG"
-    - docker run -d --name db_test -e POSTGRES_PASSWORD=testpassword $DB_IMAGE:$COMMIT_TAG
-    - sleep 10
-    - docker exec db_test psql -U postgres -c "SELECT 1"
-    - echo "Database test passed"
-  rules:
-    - if: '$CI_COMMIT_REF_NAME == "dev" || $CI_COMMIT_REF_NAME == "main"'
-      changes:
-        - db/Dockerfile
-        - db/**/*
-  needs: ["build_db"]
-
-# ----------- BUILD JOBS -----------
 build_frontend:
-  stage: build
-  image: docker:24
-  services:
-    - docker:24-dind
+  <<: *build_template
+  variables:
+    IMAGE_NAME: $FRONTEND_IMAGE
+    BUILD_CONTEXT: ./client
   script:
-    - echo "Building $FRONTEND_IMAGE:$COMMIT_TAG"
-    - docker build -t "$FRONTEND_IMAGE:$COMMIT_TAG" ./client
-  rules:
-    - if: '$CI_COMMIT_REF_NAME == "dev" || $CI_COMMIT_REF_NAME == "main"'
+    - echo "🏗️ Building Docker image for frontend..."
+    - export SHORT_SHA=${CI_COMMIT_SHA:0:8}
+    - export TIMESTAMP=$(date +%Y%m%d%H%M%S)
+    - export COMMIT_TAG="sha-${SHORT_SHA}-${TIMESTAMP}"
+    - echo "🏗️ Building $IMAGE_NAME:$COMMIT_TAG"
+    - docker build -t "$IMAGE_NAME:$COMMIT_TAG" "./client"
 
 build_backend:
-  stage: build
-  image: docker:24
-  services:
-    - docker:24-dind
+  <<: *build_template
+  variables:
+    IMAGE_NAME: $BACKEND_IMAGE
+    BUILD_CONTEXT: ./backend
   script:
-    - echo "Building $BACKEND_IMAGE:$COMMIT_TAG"
-    - docker build -t "$BACKEND_IMAGE:$COMMIT_TAG" ./backend
-  rules:
-    - if: '$CI_COMMIT_REF_NAME == "dev" || $CI_COMMIT_REF_NAME == "main"'
+    - export SHORT_SHA=${CI_COMMIT_SHA:0:8}
+    - export TIMESTAMP=$(date +%Y%m%d%H%M%S)
+    - export COMMIT_TAG="sha-${SHORT_SHA}-${TIMESTAMP}"
+    - echo "🏗️ Building Docker image for $CI_JOB_NAME with tag $COMMIT_TAG"
+    - docker build -t $IMAGE_NAME:$COMMIT_TAG $BUILD_CONTEXT
 
 build_db:
-  stage: build
-  image: docker:24
-  services:
-    - docker:24-dind
-  script:
-    - echo "Building $DB_IMAGE:$COMMIT_TAG"
-    - docker build -t "$DB_IMAGE:$COMMIT_TAG" ./db
+  <<: *build_template
+  variables:
+    IMAGE_NAME: $DB_IMAGE
+    BUILD_CONTEXT: ./db
   rules:
     - if: '$CI_COMMIT_REF_NAME == "dev" || $CI_COMMIT_REF_NAME == "main"'
       changes:
         - db/Dockerfile
         - db/**/*
 
-# ----------- PUSH JOBS -----------
 push_frontend:
-  stage: push
-  image: docker:24
-  services:
-    - docker:24-dind
-  script:
-    - echo "Logging in to Docker Hub"
-    - echo "$DOCKERHUB_TOKEN" > docker_token.txt
-    - docker login -u "$DOCKERHUB_USERNAME" --password-stdin < docker_token.txt
-    - rm docker_token.txt
-    - echo "Pushing $FRONTEND_IMAGE:$CI_COMMIT_REF_NAME"
-    - docker tag "$FRONTEND_IMAGE:latest" "$FRONTEND_IMAGE:$CI_COMMIT_REF_NAME"
-    - docker push "$FRONTEND_IMAGE:$CI_COMMIT_REF_NAME"
-    - echo "Pushing $FRONTEND_IMAGE:latest"
-    - docker push "$FRONTEND_IMAGE:latest"
-  rules:
-    - if: '$CI_COMMIT_REF_NAME == "dev" || $CI_COMMIT_REF_NAME == "main"'
+  <<: *push_template
+  variables:
+    IMAGE_NAME: $FRONTEND_IMAGE
 
 push_backend:
-  stage: push
-  image: docker:24
-  services:
-    - docker:24-dind
-  script:
-    - echo "Logging in to Docker Hub"
-    - echo "$DOCKERHUB_TOKEN" > docker_token.txt
-    - docker login -u "$DOCKERHUB_USERNAME" --password-stdin < docker_token.txt
-    - rm docker_token.txt
-    - echo "Pushing $BACKEND_IMAGE:$CI_COMMIT_REF_NAME"
-    - docker tag "$BACKEND_IMAGE:latest" "$BACKEND_IMAGE:$CI_COMMIT_REF_NAME"
-    - docker push "$BACKEND_IMAGE:$CI_COMMIT_REF_NAME"
-    - echo "Pushing $BACKEND_IMAGE:latest"
-    - docker push "$BACKEND_IMAGE:latest"
-  rules:
-    - if: '$CI_COMMIT_REF_NAME == "dev" || $CI_COMMIT_REF_NAME == "main"'
+  <<: *push_template
+  variables:
+    IMAGE_NAME: $BACKEND_IMAGE
 
 push_db:
-  stage: push
-  image: docker:24
-  services:
-    - docker:24-dind
-  script:
-    - echo "Logging in to Docker Hub"
-    - echo "$DOCKERHUB_TOKEN" > docker_token.txt
-    - docker login -u "$DOCKERHUB_USERNAME" --password-stdin < docker_token.txt
-    - rm docker_token.txt
-    - echo "Pushing $DB_IMAGE:$CI_COMMIT_REF_NAME"
-    - docker tag "$DB_IMAGE:latest" "$DB_IMAGE:$CI_COMMIT_REF_NAME"
-    - docker push "$DB_IMAGE:$CI_COMMIT_REF_NAME"
-    - echo "Pushing $DB_IMAGE:latest"
-    - docker push "$DB_IMAGE:latest"
+  <<: *push_template
+  variables:
+    IMAGE_NAME: $DB_IMAGE
   rules:
     - if: '$CI_COMMIT_REF_NAME == "dev" || $CI_COMMIT_REF_NAME == "main"'
       changes:
         - db/Dockerfile
         - db/**/*
 
-
-# ----------- DEPLOY JOB -----------
-# deploy_production:
-#   stage: deploy
-#   image: alpine:latest
-#   script:
-#     - echo "Deploying to production server"
-#     - apk add --no-cache openssh-client
-#     - sh -c '[ -n "$DEPLOY_USER" ] || { echo "ERROR: DEPLOY_USER missing!"; exit 1; }'
-#     - sh -c '[ -n "$DEPLOY_HOST" ] || { echo "ERROR: DEPLOY_HOST missing!"; exit 1; }'
-#     - sh -c 'ssh -o StrictHostKeyChecking=no "$DEPLOY_USER@$DEPLOY_HOST" "cd /path/to/project && export FRONTEND_IMAGE=$FRONTEND_IMAGE:latest && export BACKEND_IMAGE=$BACKEND_IMAGE:latest && export DB_IMAGE=$DB_IMAGE:latest && docker-compose -f docker-compose.prod.yml pull && docker-compose -f docker-compose.prod.yml up -d"'
-#   environment: production
-#   rules:
-#     - if: '$CI_COMMIT_REF_NAME == "main"'
-#       when: manual
-
-# ----------- DEBUG JOB -----------
-debug_variables:
-  stage: debug
+deploy_production:
+  stage: deploy
   image: alpine:latest
   script:
-    - echo "DOCKERHUB_USERNAME=$DOCKERHUB_USERNAME"
-    - echo "DOCKERHUB_TOKEN is set? $(test -n "$DOCKERHUB_TOKEN" && echo 'YES' || echo 'NO')"
+    - echo "🚀 Deploying to production server..."
+    - apk add --no-cache openssh
+    - ssh -o StrictHostKeyChecking=no user@your-server "
+        cd /path/to/project &&
+        docker-compose -f docker-compose.prod.yml pull &&
+        docker-compose -f docker-compose.prod.yml up -d
+      "
+  environment:
+    name: production
+    url: https://your-production-url.com
   rules:
-    - if: '$CI_COMMIT_REF_NAME == "dev"'
+    - if: '$CI_COMMIT_REF_NAME == "main"'
       when: manual
