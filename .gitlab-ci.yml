@@ -62,18 +62,14 @@ cache:
     - echo "📌 Pushing $IMAGE_NAME:$CI_COMMIT_REF_NAME"
     - docker tag "$IMAGE_NAME:$COMMIT_TAG" "$IMAGE_NAME:$CI_COMMIT_REF_NAME"
     - docker push "$IMAGE_NAME:$CI_COMMIT_REF_NAME"
-    - |
-      if [ "$CI_COMMIT_REF_NAME" = "main" ]; then
-        echo "📌 Tagging $IMAGE_NAME as $VERSION_TAG and latest for production"
-        docker tag "$IMAGE_NAME:$COMMIT_TAG" "$IMAGE_NAME:$VERSION_TAG"
-        docker tag "$IMAGE_NAME:$COMMIT_TAG" "$IMAGE_NAME:latest"
-        docker push "$IMAGE_NAME:$VERSION_TAG"
-        docker push "$IMAGE_NAME:latest"
-      elif [ "$CI_COMMIT_REF_NAME" = "dev" ]; then
-        echo "📌 Tagging $IMAGE_NAME as latest for development"
-        docker tag "$IMAGE_NAME:$COMMIT_TAG" "$IMAGE_NAME:latest"
-        docker push "$IMAGE_NAME:latest"
-      fi
+    - if [ "$CI_COMMIT_REF_NAME" = "main" ]; then echo "📌 Tagging $IMAGE_NAME as $VERSION_TAG and latest for production"; fi
+    - if [ "$CI_COMMIT_REF_NAME" = "main" ]; then docker tag "$IMAGE_NAME:$COMMIT_TAG" "$IMAGE_NAME:$VERSION_TAG"; fi
+    - if [ "$CI_COMMIT_REF_NAME" = "main" ]; then docker tag "$IMAGE_NAME:$COMMIT_TAG" "$IMAGE_NAME:latest"; fi
+    - if [ "$CI_COMMIT_REF_NAME" = "main" ]; then docker push "$IMAGE_NAME:$VERSION_TAG"; fi
+    - if [ "$CI_COMMIT_REF_NAME" = "main" ]; then docker push "$IMAGE_NAME:latest"; fi
+    - if [ "$CI_COMMIT_REF_NAME" = "dev" ]; then echo "📌 Tagging $IMAGE_NAME as latest for development"; fi
+    - if [ "$CI_COMMIT_REF_NAME" = "dev" ]; then docker tag "$IMAGE_NAME:$COMMIT_TAG" "$IMAGE_NAME:latest"; fi
+    - if [ "$CI_COMMIT_REF_NAME" = "dev" ]; then docker push "$IMAGE_NAME:latest"; fi
 
 # ----------- Jobs -----------
 test_frontend:
