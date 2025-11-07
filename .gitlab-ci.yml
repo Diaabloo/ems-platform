@@ -3,10 +3,10 @@ stages:
   - build
   - push
   - deploy
+  - debug
 
 variables:
   DOCKER_TLS_CERTDIR: ""
-  CACHE_DIR: "$CI_PROJECT_DIR/.cache"
   FRONTEND_IMAGE: "amineelalami/ems-platform-frontend"
   BACKEND_IMAGE: "amineelalami/ems-platform-backend"
   DB_IMAGE: "amineelalami/ems-platform-db"
@@ -19,7 +19,6 @@ cache:
   paths:
     - client/node_modules/
     - backend/node_modules/
-    - $CACHE_DIR
 
 # ----------- TEST JOBS -----------
 test_frontend:
@@ -107,22 +106,22 @@ push_frontend:
     - docker:24-dind
   script:
     - echo "Checking Docker Hub credentials..."
-    - if [ -z "$DOCKERHUB_USERNAME" ] || [ -z "$DOCKERHUB_TOKEN" ]; then echo "ERROR: DOCKERHUB_USERNAME or DOCKERHUB_TOKEN missing!"; exit 1; fi
+    - test -n "$DOCKERHUB_USERNAME" || (echo "ERROR: DOCKERHUB_USERNAME missing!" && exit 1)
+    - test -n "$DOCKERHUB_TOKEN" || (echo "ERROR: DOCKERHUB_TOKEN missing!" && exit 1)
     - echo "$DOCKERHUB_TOKEN" > docker_token.txt
     - docker login -u "$DOCKERHUB_USERNAME" --password-stdin < docker_token.txt
     - rm docker_token.txt
     - echo "Pushing $FRONTEND_IMAGE:$COMMIT_TAG"
     - docker push "$FRONTEND_IMAGE:$COMMIT_TAG"
+    - echo "Tagging and pushing $FRONTEND_IMAGE:$CI_COMMIT_REF_NAME"
     - docker tag "$FRONTEND_IMAGE:$COMMIT_TAG" "$FRONTEND_IMAGE:$CI_COMMIT_REF_NAME"
     - docker push "$FRONTEND_IMAGE:$CI_COMMIT_REF_NAME"
-    - if [ "$CI_COMMIT_REF_NAME" = "main" ]; then echo "Tagging $FRONTEND_IMAGE as $VERSION_TAG and latest"; fi
-    - if [ "$CI_COMMIT_REF_NAME" = "main" ]; then docker tag "$FRONTEND_IMAGE:$COMMIT_TAG" "$FRONTEND_IMAGE:$VERSION_TAG"; fi
-    - if [ "$CI_COMMIT_REF_NAME" = "main" ]; then docker tag "$FRONTEND_IMAGE:$COMMIT_TAG" "$FRONTEND_IMAGE:latest"; fi
-    - if [ "$CI_COMMIT_REF_NAME" = "main" ]; then docker push "$FRONTEND_IMAGE:$VERSION_TAG"; fi
-    - if [ "$CI_COMMIT_REF_NAME" = "main" ]; then docker push "$FRONTEND_IMAGE:latest"; fi
-    - if [ "$CI_COMMIT_REF_NAME" = "dev" ]; then echo "Tagging $FRONTEND_IMAGE as latest"; fi
-    - if [ "$CI_COMMIT_REF_NAME" = "dev" ]; then docker tag "$FRONTEND_IMAGE:$COMMIT_TAG" "$FRONTEND_IMAGE:latest"; fi
-    - if [ "$CI_COMMIT_REF_NAME" = "dev" ]; then docker push "$FRONTEND_IMAGE:latest"; fi
+    - echo "Tagging and pushing $FRONTEND_IMAGE:latest"
+    - docker tag "$FRONTEND_IMAGE:$COMMIT_TAG" "$FRONTEND_IMAGE:latest"
+    - docker push "$FRONTEND_IMAGE:latest"
+    - test "$CI_COMMIT_REF_NAME" = "main" && echo "Tagging and pushing $FRONTEND_IMAGE:$VERSION_TAG"
+    - test "$CI_COMMIT_REF_NAME" = "main" && docker tag "$FRONTEND_IMAGE:$COMMIT_TAG" "$FRONTEND_IMAGE:$VERSION_TAG"
+    - test "$CI_COMMIT_REF_NAME" = "main" && docker push "$FRONTEND_IMAGE:$VERSION_TAG"
   rules:
     - if: '$CI_COMMIT_REF_NAME == "dev" || $CI_COMMIT_REF_NAME == "main"'
   needs: ["build_frontend"]
@@ -134,22 +133,22 @@ push_backend:
     - docker:24-dind
   script:
     - echo "Checking Docker Hub credentials..."
-    - if [ -z "$DOCKERHUB_USERNAME" ] || [ -z "$DOCKERHUB_TOKEN" ]; then echo "ERROR: DOCKERHUB_USERNAME or DOCKERHUB_TOKEN missing!"; exit 1; fi
+    - test -n "$DOCKERHUB_USERNAME" || (echo "ERROR: DOCKERHUB_USERNAME missing!" && exit 1)
+    - test -n "$DOCKERHUB_TOKEN" || (echo "ERROR: DOCKERHUB_TOKEN missing!" && exit 1)
     - echo "$DOCKERHUB_TOKEN" > docker_token.txt
     - docker login -u "$DOCKERHUB_USERNAME" --password-stdin < docker_token.txt
     - rm docker_token.txt
     - echo "Pushing $BACKEND_IMAGE:$COMMIT_TAG"
     - docker push "$BACKEND_IMAGE:$COMMIT_TAG"
+    - echo "Tagging and pushing $BACKEND_IMAGE:$CI_COMMIT_REF_NAME"
     - docker tag "$BACKEND_IMAGE:$COMMIT_TAG" "$BACKEND_IMAGE:$CI_COMMIT_REF_NAME"
     - docker push "$BACKEND_IMAGE:$CI_COMMIT_REF_NAME"
-    - if [ "$CI_COMMIT_REF_NAME" = "main" ]; then echo "Tagging $BACKEND_IMAGE as $VERSION_TAG and latest"; fi
-    - if [ "$CI_COMMIT_REF_NAME" = "main" ]; then docker tag "$BACKEND_IMAGE:$COMMIT_TAG" "$BACKEND_IMAGE:$VERSION_TAG"; fi
-    - if [ "$CI_COMMIT_REF_NAME" = "main" ]; then docker tag "$BACKEND_IMAGE:$COMMIT_TAG" "$BACKEND_IMAGE:latest"; fi
-    - if [ "$CI_COMMIT_REF_NAME" = "main" ]; then docker push "$BACKEND_IMAGE:$VERSION_TAG"; fi
-    - if [ "$CI_COMMIT_REF_NAME" = "main" ]; then docker push "$BACKEND_IMAGE:latest"; fi
-    - if [ "$CI_COMMIT_REF_NAME" = "dev" ]; then echo "Tagging $BACKEND_IMAGE as latest"; fi
-    - if [ "$CI_COMMIT_REF_NAME" = "dev" ]; then docker tag "$BACKEND_IMAGE:$COMMIT_TAG" "$BACKEND_IMAGE:latest"; fi
-    - if [ "$CI_COMMIT_REF_NAME" = "dev" ]; then docker push "$BACKEND_IMAGE:latest"; fi
+    - echo "Tagging and pushing $BACKEND_IMAGE:latest"
+    - docker tag "$BACKEND_IMAGE:$COMMIT_TAG" "$BACKEND_IMAGE:latest"
+    - docker push "$BACKEND_IMAGE:latest"
+    - test "$CI_COMMIT_REF_NAME" = "main" && echo "Tagging and pushing $BACKEND_IMAGE:$VERSION_TAG"
+    - test "$CI_COMMIT_REF_NAME" = "main" && docker tag "$BACKEND_IMAGE:$COMMIT_TAG" "$BACKEND_IMAGE:$VERSION_TAG"
+    - test "$CI_COMMIT_REF_NAME" = "main" && docker push "$BACKEND_IMAGE:$VERSION_TAG"
   rules:
     - if: '$CI_COMMIT_REF_NAME == "dev" || $CI_COMMIT_REF_NAME == "main"'
   needs: ["build_backend"]
@@ -161,22 +160,22 @@ push_db:
     - docker:24-dind
   script:
     - echo "Checking Docker Hub credentials..."
-    - if [ -z "$DOCKERHUB_USERNAME" ] || [ -z "$DOCKERHUB_TOKEN" ]; then echo "ERROR: DOCKERHUB_USERNAME or DOCKERHUB_TOKEN missing!"; exit 1; fi
+    - test -n "$DOCKERHUB_USERNAME" || (echo "ERROR: DOCKERHUB_USERNAME missing!" && exit 1)
+    - test -n "$DOCKERHUB_TOKEN" || (echo "ERROR: DOCKERHUB_TOKEN missing!" && exit 1)
     - echo "$DOCKERHUB_TOKEN" > docker_token.txt
     - docker login -u "$DOCKERHUB_USERNAME" --password-stdin < docker_token.txt
     - rm docker_token.txt
     - echo "Pushing $DB_IMAGE:$COMMIT_TAG"
     - docker push "$DB_IMAGE:$COMMIT_TAG"
+    - echo "Tagging and pushing $DB_IMAGE:$CI_COMMIT_REF_NAME"
     - docker tag "$DB_IMAGE:$COMMIT_TAG" "$DB_IMAGE:$CI_COMMIT_REF_NAME"
     - docker push "$DB_IMAGE:$CI_COMMIT_REF_NAME"
-    - if [ "$CI_COMMIT_REF_NAME" = "main" ]; then echo "Tagging $DB_IMAGE as $VERSION_TAG and latest"; fi
-    - if [ "$CI_COMMIT_REF_NAME" = "main" ]; then docker tag "$DB_IMAGE:$COMMIT_TAG" "$DB_IMAGE:$VERSION_TAG"; fi
-    - if [ "$CI_COMMIT_REF_NAME" = "main" ]; then docker tag "$DB_IMAGE:$COMMIT_TAG" "$DB_IMAGE:latest"; fi
-    - if [ "$CI_COMMIT_REF_NAME" = "main" ]; then docker push "$DB_IMAGE:$VERSION_TAG"; fi
-    - if [ "$CI_COMMIT_REF_NAME" = "main" ]; then docker push "$DB_IMAGE:latest"; fi
-    - if [ "$CI_COMMIT_REF_NAME" = "dev" ]; then echo "Tagging $DB_IMAGE as latest"; fi
-    - if [ "$CI_COMMIT_REF_NAME" = "dev" ]; then docker tag "$DB_IMAGE:$COMMIT_TAG" "$DB_IMAGE:latest"; fi
-    - if [ "$CI_COMMIT_REF_NAME" = "dev" ]; then docker push "$DB_IMAGE:latest"; fi
+    - echo "Tagging and pushing $DB_IMAGE:latest"
+    - docker tag "$DB_IMAGE:$COMMIT_TAG" "$DB_IMAGE:latest"
+    - docker push "$DB_IMAGE:latest"
+    - test "$CI_COMMIT_REF_NAME" = "main" && echo "Tagging and pushing $DB_IMAGE:$VERSION_TAG"
+    - test "$CI_COMMIT_REF_NAME" = "main" && docker tag "$DB_IMAGE:$COMMIT_TAG" "$DB_IMAGE:$VERSION_TAG"
+    - test "$CI_COMMIT_REF_NAME" = "main" && docker push "$DB_IMAGE:$VERSION_TAG"
   rules:
     - if: '$CI_COMMIT_REF_NAME == "dev" || $CI_COMMIT_REF_NAME == "main"'
       changes:
@@ -191,15 +190,9 @@ deploy_production:
   script:
     - echo "Deploying to production server..."
     - apk add --no-cache openssh-client
-    - if [ -z "$DEPLOY_USER" ] || [ -z "$DEPLOY_HOST" ]; then echo "ERROR: DEPLOY_USER or DEPLOY_HOST missing!"; exit 1; fi
-    - ssh -o StrictHostKeyChecking=no "$DEPLOY_USER@$DEPLOY_HOST" "
-        cd /path/to/project &&
-        export FRONTEND_IMAGE=$FRONTEND_IMAGE:latest &&
-        export BACKEND_IMAGE=$BACKEND_IMAGE:latest &&
-        export DB_IMAGE=$DB_IMAGE:latest &&
-        docker-compose -f docker-compose.prod.yml pull &&
-        docker-compose -f docker-compose.prod.yml up -d
-      "
+    - test -n "$DEPLOY_USER" || (echo "ERROR: DEPLOY_USER missing!" && exit 1)
+    - test -n "$DEPLOY_HOST" || (echo "ERROR: DEPLOY_HOST missing!" && exit 1)
+    - ssh -o StrictHostKeyChecking=no "$DEPLOY_USER@$DEPLOY_HOST" "cd /path/to/project && export FRONTEND_IMAGE=$FRONTEND_IMAGE:latest && export BACKEND_IMAGE=$BACKEND_IMAGE:latest && export DB_IMAGE=$DB_IMAGE:latest && docker-compose -f docker-compose.prod.yml pull && docker-compose -f docker-compose.prod.yml up -d"
   environment: production
   rules:
     - if: '$CI_COMMIT_REF_NAME == "main"'
@@ -207,11 +200,11 @@ deploy_production:
 
 # ----------- DEBUG JOB -----------
 debug_variables:
-  stage: test
+  stage: debug
   image: alpine:latest
   script:
     - echo "DOCKERHUB_USERNAME=$DOCKERHUB_USERNAME"
-    - echo "DOCKERHUB_TOKEN is set? $([ -z "$DOCKERHUB_TOKEN" ] && echo 'NO' || echo 'YES')"
+    - echo "DOCKERHUB_TOKEN is set? $(test -n "$DOCKERHUB_TOKEN" && echo 'YES' || echo 'NO')"
   rules:
     - if: '$CI_COMMIT_REF_NAME == "dev"'
       when: manual
