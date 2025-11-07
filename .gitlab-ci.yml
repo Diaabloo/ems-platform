@@ -75,7 +75,7 @@ cache:
         docker tag $IMAGE_NAME:$COMMIT_TAG $IMAGE_NAME:$VERSION_TAG
         docker push $IMAGE_NAME:$VERSION_TAG
         docker tag $IMAGE_NAME:$COMMIT_TAG $IMAGE_NAME:latest
-        docker push $IMAGE_NAME:latest
+        docker push $IMAGE_NAME:$VERSION_TAG
       elif [ "$CI_COMMIT_REF_NAME" = "dev" ]; then
         echo "📌 Tagging $IMAGE_NAME as latest for development"
         docker tag $IMAGE_NAME:$COMMIT_TAG $IMAGE_NAME:latest
@@ -141,6 +141,13 @@ build_db:
       changes:
         - db/Dockerfile
         - db/**/*
+  script:
+    - echo "🏗️ Building Docker image for database..."
+    - export SHORT_SHA=${CI_COMMIT_SHA:0:8}
+    - export TIMESTAMP=$(date +%Y%m%d%H%M%S)
+    - export COMMIT_TAG="sha-${SHORT_SHA}-${TIMESTAMP}"
+    - echo "🏗️ Building $IMAGE_NAME:$COMMIT_TAG"
+    - docker build -t "$IMAGE_NAME:$COMMIT_TAG" "./db"
 
 push_frontend:
   <<: *push_template
