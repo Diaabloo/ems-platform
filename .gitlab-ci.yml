@@ -113,6 +113,8 @@ test_db:
     - docker:24-dind
   variables:
     CI_JOB_NAME: "database tests"
+    IMAGE_NAME: $DB_IMAGE
+    BUILD_CONTEXT: ./db
   rules:
     - if: '$CI_COMMIT_REF_NAME == "dev" || $CI_COMMIT_REF_NAME == "main"'
       changes:
@@ -123,10 +125,10 @@ test_db:
     - export SHORT_SHA=${CI_COMMIT_SHA:0:8}
     - export TIMESTAMP=$(date +%Y%m%d%H%M%S)
     - export COMMIT_TAG="sha-${SHORT_SHA}-${TIMESTAMP}"
-    - echo "🏗️ Building $DB_IMAGE:$COMMIT_TAG for testing..."
-    - docker build -t "$DB_IMAGE:$COMMIT_TAG" "./db"
+    - echo "🏗️ Building $IMAGE_NAME:$COMMIT_TAG for testing..."
+    - docker build -t "$IMAGE_NAME:$COMMIT_TAG" "$BUILD_CONTEXT"
     - echo "🔍 Testing database initialization..."
-    - docker run --rm -e POSTGRES_USER=$POSTGRES_USER -e POSTGRES_PASSWORD=$POSTGRES_PASSWORD $DB_IMAGE:$COMMIT_TAG pg_isready -U $POSTGRES_USER
+    - docker run --rm -e POSTGRES_USER=$POSTGRES_USER -e POSTGRES_PASSWORD=$POSTGRES_PASSWORD $IMAGE_NAME:$COMMIT_TAG pg_isready -U $POSTGRES_USER
 
 build_frontend:
   <<: *build_template
