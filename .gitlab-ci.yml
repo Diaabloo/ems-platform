@@ -158,19 +158,19 @@ push_db:
 
 
 # ----------- DEPLOY JOB -----------
-deploy_production:
-  stage: deploy
-  image: alpine:latest
-  script:
-    - echo "Deploying to production server"
-    - apk add --no-cache openssh-client
-    - sh -c '[ -n "$DEPLOY_USER" ] || { echo "ERROR: DEPLOY_USER missing!"; exit 1; }'
-    - sh -c '[ -n "$DEPLOY_HOST" ] || { echo "ERROR: DEPLOY_HOST missing!"; exit 1; }'
-    - sh -c 'ssh -o StrictHostKeyChecking=no "$DEPLOY_USER@$DEPLOY_HOST" "cd /path/to/project && export FRONTEND_IMAGE=$FRONTEND_IMAGE:latest && export BACKEND_IMAGE=$BACKEND_IMAGE:latest && export DB_IMAGE=$DB_IMAGE:latest && docker-compose -f docker-compose.prod.yml pull && docker-compose -f docker-compose.prod.yml up -d"'
-  environment: production
-  rules:
-    - if: '$CI_COMMIT_REF_NAME == "main"'
-      when: manual
+# deploy_production:
+#   stage: deploy
+#   image: alpine:latest
+#   script:
+#     - echo "Deploying to production server"
+#     - apk add --no-cache openssh-client
+#     - sh -c '[ -n "$DEPLOY_USER" ] || { echo "ERROR: DEPLOY_USER missing!"; exit 1; }'
+#     - sh -c '[ -n "$DEPLOY_HOST" ] || { echo "ERROR: DEPLOY_HOST missing!"; exit 1; }'
+#     - sh -c 'ssh -o StrictHostKeyChecking=no "$DEPLOY_USER@$DEPLOY_HOST" "cd /path/to/project && export FRONTEND_IMAGE=$FRONTEND_IMAGE:latest && export BACKEND_IMAGE=$BACKEND_IMAGE:latest && export DB_IMAGE=$DB_IMAGE:latest && docker-compose -f docker-compose.prod.yml pull && docker-compose -f docker-compose.prod.yml up -d"'
+#   environment: production
+#   rules:
+#     - if: '$CI_COMMIT_REF_NAME == "main"'
+#       when: manual
 
 # ----------- DEBUG JOB -----------
 debug_variables:
