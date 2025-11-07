@@ -75,6 +75,8 @@ push_frontend:
   services:
     - docker:24-dind
   script:
+    - echo "Docker Username: '$DOCKERHUB_USERNAME'"
+    - echo "Docker Token length: ${#DOCKERHUB_TOKEN}"
     - echo "$DOCKERHUB_TOKEN" | docker login -u "$DOCKERHUB_USERNAME" --password-stdin
     - docker push $FRONTEND_IMAGE:$COMMIT_TAG
     - docker tag $FRONTEND_IMAGE:$COMMIT_TAG $FRONTEND_IMAGE:$CI_COMMIT_REF_NAME
@@ -83,26 +85,17 @@ push_frontend:
     - if: '$CI_COMMIT_REF_NAME == "dev" || $CI_COMMIT_REF_NAME == "main"'
 
 push_backend:
-  image: docker:20
   stage: push
+  image: docker:24
   services:
-    - docker:20-dind
-  variables:
-    DOCKER_TLS_CERTDIR: ""
+    - docker:24-dind
   script:
-    - echo "Docker username: $DOCKERHUB_USERNAME"
-    - |
-      if [ -z "$DOCKERHUB_TOKEN" ]; then
-        echo "DOCKERHUB_TOKEN is empty"
-        exit 1
-      fi
     - echo "$DOCKERHUB_TOKEN" | docker login -u "$DOCKERHUB_USERNAME" --password-stdin
     - docker push $BACKEND_IMAGE:$COMMIT_TAG
     - docker tag $BACKEND_IMAGE:$COMMIT_TAG $BACKEND_IMAGE:$CI_COMMIT_REF_NAME
     - docker push $BACKEND_IMAGE:$CI_COMMIT_REF_NAME
   rules:
     - if: '$CI_COMMIT_REF_NAME == "dev" || $CI_COMMIT_REF_NAME == "main"'
-
 
 # ----------- DEPLOY JOB -----------
 deploy_production:
