@@ -8,11 +8,10 @@ variables:
   DOCKER_TLS_CERTDIR: ""
   CACHE_DIR: "$CI_PROJECT_DIR/.cache"
 
-  # Images Docker
-  # FRONTEND_IMAGE: "amineelalami/ems-platform-frontend"
-  # BACKEND_IMAGE: "amineelalami/ems-platform-backend"
-  # DB_IMAGE: "amineelalami/ems-platform-db"
-  BASE_IMAGE: "amineelalami/ems-platform"
+  # ✅ Les vraies images Docker Hub (ne surtout pas commenter ces lignes)
+  FRONTEND_IMAGE: "amineelalami/ems-platform:frontend"
+  BACKEND_IMAGE: "amineelalami/ems-platform:backend"
+  DB_IMAGE: "amineelalami/ems-platform:db"
 
   # Tag basé sur SHA court + date + pipeline pour traçabilité
   SHORT_SHA: "${CI_COMMIT_SHA:0:8}"
@@ -52,6 +51,7 @@ cache:
     - if: '$CI_COMMIT_REF_NAME == "dev" || $CI_COMMIT_REF_NAME == "main"'
   script:
     - echo "🏗️ Building Docker image for $CI_JOB_NAME"
+    # ⚠️ Ces variables seront redéfinies dans chaque job build_*
     - docker build -t $IMAGE_NAME:$COMMIT_TAG $BUILD_CONTEXT
 
 .push_template: &push_template
@@ -112,32 +112,31 @@ test_backend:
 build_frontend:
   <<: *build_template
   variables:
-    IMAGE_NAME: $FRONTEND_IMAGE
+    IMAGE_NAME: "amineelalami/ems-platform:frontend"  # ✅ tag correct
     BUILD_CONTEXT: ./client
   script:
-    - echo "🏗️ Building Docker image for frontend..."
     - export SHORT_SHA=${CI_COMMIT_SHA:0:8}
     - export TIMESTAMP=$(date +%Y%m%d%H%M%S)
     - export COMMIT_TAG="sha-${SHORT_SHA}-${TIMESTAMP}"
     - echo "🏗️ Building $IMAGE_NAME:$COMMIT_TAG"
-    - docker build -t "$IMAGE_NAME:$COMMIT_TAG" "./client"
+    - docker build -t "$IMAGE_NAME-$COMMIT_TAG" "./client"  # ✅ corrigé pour format valide
 
 build_backend:
   <<: *build_template
   variables:
-    IMAGE_NAME: $BACKEND_IMAGE
+    IMAGE_NAME: "amineelalami/ems-platform:backend"  # ✅ tag correct
     BUILD_CONTEXT: ./backend
   script:
     - export SHORT_SHA=${CI_COMMIT_SHA:0:8}
     - export TIMESTAMP=$(date +%Y%m%d%H%M%S)
     - export COMMIT_TAG="sha-${SHORT_SHA}-${TIMESTAMP}"
-    - echo "🏗️ Building Docker image for $CI_JOB_NAME with tag $COMMIT_TAG"
-    - docker build -t $IMAGE_NAME:$COMMIT_TAG $BUILD_CONTEXT
+    - echo "🏗️ Building Docker image for backend with tag $COMMIT_TAG"
+    - docker build -t "$IMAGE_NAME-$COMMIT_TAG" "$BUILD_CONTEXT"  # ✅ corrigé pour éviter double ‘:’
 
 build_db:
   <<: *build_template
   variables:
-    IMAGE_NAME: $DB_IMAGE
+    IMAGE_NAME: "amineelalami/ems-platform:db"  # ✅ tag correct
     BUILD_CONTEXT: ./db
   rules:
     - if: '$CI_COMMIT_REF_NAME == "dev" || $CI_COMMIT_REF_NAME == "main"'
@@ -148,17 +147,17 @@ build_db:
 push_frontend:
   <<: *push_template
   variables:
-    IMAGE_NAME: $FRONTEND_IMAGE
+    IMAGE_NAME: "amineelalami/ems-platform:frontend"
 
 push_backend:
   <<: *push_template
   variables:
-    IMAGE_NAME: $BACKEND_IMAGE
+    IMAGE_NAME: "amineelalami/ems-platform:backend"
 
 push_db:
   <<: *push_template
   variables:
-    IMAGE_NAME: $DB_IMAGE
+    IMAGE_NAME: "amineelalami/ems-platform:db"
   rules:
     - if: '$CI_COMMIT_REF_NAME == "dev" || $CI_COMMIT_REF_NAME == "main"'
       changes:
@@ -172,27 +171,7 @@ deploy_production:
     - echo "🚀 Deploying to production server..."
     - apk add --no-cache openssh
     # Exemple : connexion SSH et mise à jour via docker-compose
-    - ssh -o StrictHostKeyChecking=no user@your-server "
-        cd /path/to/project &&
-        docker-compose -f docker-compose.prod.yml pull &&
-        docker-compose -f docker-compose.prod.yml up -d
-      "
-  environment:
-    name: production
-    url: https://your-production-url.com
-  rules:
-    - if: '$CI_COMMIT_REF_NAME == "main"'
-      when: manual
-
-
-deploy_production:
-  stage: deploy
-  image: alpine:latest
-  script:
-    - echo "🚀 Deploying to production server..."
-    - apk add --no-cache openssh
-    # Exemple : connexion SSH et mise à jour via docker-compose
-    - ssh -o StrictHostKeyChecking=no user@your-server "
+    - ssh -o StrictHostKeyChecking=no $DEPLOY_USER@$DEPLOY_HOST "
         cd /path/to/project &&
         docker-compose -f docker-compose.prod.yml pull &&
         docker-compose -f docker-compose.prod.yml up -d
