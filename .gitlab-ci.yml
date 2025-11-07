@@ -50,9 +50,12 @@ cache:
   rules:
     - if: '$CI_COMMIT_REF_NAME == "dev" || $CI_COMMIT_REF_NAME == "main"'
   script:
-    - echo "🏗️ Building Docker image for $CI_JOB_NAME"
+    - export SHORT_SHA=${CI_COMMIT_SHA:0:8}
+    - export TIMESTAMP=$(date +%Y%m%d%H%M%S)
+    - export COMMIT_TAG="sha-${SHORT_SHA}-${TIMESTAMP}"
+    - echo "🏗️ Building $IMAGE_NAME:$COMMIT_TAG"
     # ⚠️ Ces variables seront redéfinies dans chaque job build_*
-    - docker build -t $IMAGE_NAME:$COMMIT_TAG $BUILD_CONTEXT
+    - docker build -t "$IMAGE_NAME:$COMMIT_TAG" "$BUILD_CONTEXT"
 
 .push_template: &push_template
   image: docker:24
@@ -61,28 +64,24 @@ cache:
     - docker:24-dind
   rules:
     - if: '$CI_COMMIT_REF_NAME == "dev" || $CI_COMMIT_REF_NAME == "main"'
-  variables:
-    DOCKERHUB_USERNAME: $DOCKERHUB_USERNAME
-    DOCKERHUB_TOKEN: $DOCKERHUB_TOKEN
   script:
-    - echo "🔑 Login to Docker Hub..."
+    - echo "🔑 Checking Docker Hub credentials..."
+    - if [ -z "$DOCKERHUB_USERNAME" ] || [ -z "$DOCKERHUB_TOKEN" ]; then echo "ERREUR : DOCKERHUB_USERNAME ou DOCKERHUB_TOKEN manquant !"; exit 1; fi
     - echo "$DOCKERHUB_TOKEN" | docker login -u "$DOCKERHUB_USERNAME" --password-stdin
-    - echo "📌 Pushing Docker image for $IMAGE_NAME"
-    - docker tag $IMAGE_NAME:$COMMIT_TAG $IMAGE_NAME:$CI_COMMIT_REF_NAME
-    - docker push $IMAGE_NAME:$CI_COMMIT_REF_NAME
-
+    - echo "📌 Pushing $IMAGE_NAME:$CI_COMMIT_REF_NAME"
+    - docker tag "$IMAGE_NAME:$COMMIT_TAG" "$IMAGE_NAME:$CI_COMMIT_REF_NAME"
+    - docker push "$IMAGE_NAME:$CI_COMMIT_REF_NAME"
     - |
       if [ "$CI_COMMIT_REF_NAME" = "main" ]; then
         echo "📌 Tagging $IMAGE_NAME as $VERSION_TAG and latest for production"
-        docker tag $IMAGE_NAME:$COMMIT_TAG $IMAGE_NAME:$VERSION_TAG
-        docker push $IMAGE_NAME:$VERSION_TAG
-
-        docker tag $IMAGE_NAME:$COMMIT_TAG $IMAGE_NAME:latest
-        docker push $IMAGE_NAME:latest
+        docker tag "$IMAGE_NAME:$COMMIT_TAG" "$IMAGE_NAME:$VERSION_TAG"
+        docker tag "$IMAGE_NAME:$COMMIT_TAG" "$IMAGE_NAME:latest"
+        docker push "$IMAGE_NAME:$VERSION_TAG"
+        docker push "$IMAGE_NAME:latest"
       elif [ "$CI_COMMIT_REF_NAME" = "dev" ]; then
         echo "📌 Tagging $IMAGE_NAME as latest for development"
-        docker tag $IMAGE_NAME:$COMMIT_TAG $IMAGE_NAME:latest
-        docker push $IMAGE_NAME:latest
+        docker tag "$IMAGE_NAME:$COMMIT_TAG" "$IMAGE_NAME:latest"
+        docker push "$IMAGE_NAME:latest"
       fi
 
 # ----------- Jobs -----------
@@ -112,7 +111,7 @@ test_backend:
 build_frontend:
   <<: *build_template
   variables:
-    IMAGE_NAME: "amineelalami/ems-platform:frontend"  # ✅ tag correct
+    IMAGE_NAME: $FRONTEND_IMAGE  # ✅ tag correct
     BUILD_CONTEXT: ./client
   script:
     - export SHORT_SHA=${CI_COMMIT_SHA:0:8}
@@ -124,7 +123,7 @@ build_frontend:
 build_backend:
   <<: *build_template
   variables:
-    IMAGE_NAME: "amineelalami/ems-platform:backend"  # ✅ tag correct
+    IMAGE_NAME: $BACKEND_IMAGE  # ✅ tag correct
     BUILD_CONTEXT: ./backend
   script:
     - export SHORT_SHA=${CI_COMMIT_SHA:0:8}
@@ -136,7 +135,7 @@ build_backend:
 build_db:
   <<: *build_template
   variables:
-    IMAGE_NAME: "amineelalami/ems-platform:db"  # ✅ tag correct
+    IMAGE_NAME: $DB_IMAGE  # ✅ tag correct
     BUILD_CONTEXT: ./db
   rules:
     - if: '$CI_COMMIT_REF_NAME == "dev" || $CI_COMMIT_REF_NAME == "main"'
