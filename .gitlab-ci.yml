@@ -120,14 +120,13 @@ test_db:
     - git fetch origin dump
     - git checkout origin/dump -- db/employeedb_dump_pg15.sql
   script:
-    - echo "🔍 Running database tests..."
-    - export SHORT_SHA=${CI_COMMIT_SHA:0:8}
-    - export TIMESTAMP=$(date +%Y%m%d%H%M%S)
-    - export COMMIT_TAG="sha-${SHORT_SHA}-${TIMESTAMP}"
-    - echo "🏗️ Building $IMAGE_NAME:$COMMIT_TAG for testing..."
-    - docker build -t "$IMAGE_NAME:$COMMIT_TAG" "$BUILD_CONTEXT"
-    - echo "🔍 Testing database initialization..."
-    - docker run --rm -e POSTGRES_USER=$POSTGRES_USER -e POSTGRES_PASSWORD=$POSTGRES_PASSWORD $IMAGE_NAME:$COMMIT_TAG pg_isready -U $POSTGRES_USER
+    - echo "🔍 Vérification des variables d'environnement :"
+    - echo "POSTGRES_USER='$POSTGRES_USER'"
+    - echo "POSTGRES_PASSWORD='******'"
+    - echo "🏗️ Build de l'image Docker"
+    - docker build -t "$IMAGE_NAME:test" .
+    - echo "🔍 Test de la connexion à la base de données avec pg_isready"
+    - docker run --rm -e POSTGRES_USER="$POSTGRES_USER" -e POSTGRES_PASSWORD="$POSTGRES_PASSWORD" "$IMAGE_NAME:test" pg_isready -U "$POSTGRES_USER"
 
 build_frontend:
   <<: *build_template
