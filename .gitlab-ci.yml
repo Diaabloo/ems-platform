@@ -114,11 +114,11 @@ test_db:
   services:
     - docker:24-dind
   variables:
-    CI_JOB_NAME: "database tests"
     IMAGE_NAME: $DB_IMAGE
     BUILD_CONTEXT: ./db
-  rules:
-    - if: '$CI_COMMIT_REF_NAME == "dev" || $CI_COMMIT_REF_NAME == "main"'
+  before_script:
+    - git fetch origin dump
+    - git checkout origin/dump -- db/employeedb_dump_pg15.sql
   script:
     - echo "🔍 Running database tests..."
     - export SHORT_SHA=${CI_COMMIT_SHA:0:8}
