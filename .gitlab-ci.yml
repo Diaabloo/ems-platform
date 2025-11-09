@@ -7,6 +7,8 @@ stages:
 variables:
   DOCKER_TLS_CERTDIR: ""
   CACHE_DIR: "$CI_PROJECT_DIR/.cache"
+  DOCKERHUB_USERNAME: "$DOCKERHUB_USERNAME"
+  DOCKERHUB_TOKEN: "$DOCKERHUB_TOKEN"
 
   # Images Docker
   FRONTEND_IMAGE: "amineelalami/ems-platform-frontend"
