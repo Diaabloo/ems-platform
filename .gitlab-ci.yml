@@ -119,9 +119,6 @@ test_db:
     BUILD_CONTEXT: ./db
   rules:
     - if: '$CI_COMMIT_REF_NAME == "dev" || $CI_COMMIT_REF_NAME == "main"'
-      changes:
-        - db/Dockerfile
-        - db/**/*
   script:
     - echo "🔍 Running database tests..."
     - export SHORT_SHA=${CI_COMMIT_SHA:0:8}
@@ -164,9 +161,6 @@ build_db:
     BUILD_CONTEXT: ./db
   rules:
     - if: '$CI_COMMIT_REF_NAME == "dev" || $CI_COMMIT_REF_NAME == "main"'
-      changes:
-        - db/Dockerfile
-        - db/**/*
   script:
     - echo "🏗️ Building Docker image for database..."
     - export SHORT_SHA=${CI_COMMIT_SHA:0:8}
@@ -191,9 +185,6 @@ push_db:
     IMAGE_NAME: $DB_IMAGE
   rules:
     - if: '$CI_COMMIT_REF_NAME == "dev" || $CI_COMMIT_REF_NAME == "main"'
-      changes:
-        - db/Dockerfile
-        - db/**/*
 
 deploy_production:
   stage: deploy
