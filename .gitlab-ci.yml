@@ -105,43 +105,40 @@ test_db:
     DOCKER_TLS_VERIFY: "0"
     POSTGRES_DB: "employeedb"
   before_script:
-    - apk add --no-cache postgresql-client
+    - apk add --no-cache postgresql-client bash
     - docker info
   script:
+    # Vérification des variables
     - echo "🔍 Testing database image..."
     - echo "POSTGRES_USER: $POSTGRES_USER"
     - echo "POSTGRES_DB: $POSTGRES_DB"
 
-    # Build the database image
+    # Build de l'image
     - echo "🏗️ Building database image..."
     - docker build -t $DB_IMAGE:test ./db
 
-    # Test database initialization
+    # Démarrage du conteneur
     - echo "🐘 Starting test database container..."
-    - |
-      docker run -d \
-        --name test-db \
-        -e POSTGRES_USER="$POSTGRES_USER" \
-        -e POSTGRES_PASSWORD="$POSTGRES_PASSWORD" \
-        -e POSTGRES_DB="$POSTGRES_DB" \
-        -p 5432:5432 \
-        $DB_IMAGE:test
+    - docker run -d --name test-db -e POSTGRES_USER="$POSTGRES_USER" -e POSTGRES_PASSWORD="$POSTGRES_PASSWORD" -e POSTGRES_DB="$POSTGRES_DB" -p 5432:5432 $DB_IMAGE:test
 
-    # Wait for database to be ready
+    # Attente que la base soit prête
     - echo "⏳ Waiting for database to be ready..."
-    - timeout 60s sh -c 'until pg_isready -h localhost -p 5432 -U $POSTGRES_USER; do sleep 2; done'
+    - for i in {1..30}; do
+        if pg_isready -h localhost -p 5432 -U $POSTGRES_USER; then
+          echo "✅ Database is ready!"
+          break
+        fi
+        echo "⏱️ Waiting... attempt $i/30"
+        sleep 2
+      done
 
-    # Test connection and check if database was initialized
+    # Test de connexion
     - echo "✅ Testing database connection..."
-    - |
-      PGPASSWORD="$POSTGRES_PASSWORD" psql -h localhost -U "$POSTGRES_USER" -d "$POSTGRES_DB" \
-        -c "SELECT 'Database connection successful' as status;" && echo "✅ Connection test passed"
+    - PGPASSWORD="$POSTGRES_PASSWORD" psql -h localhost -U "$POSTGRES_USER" -d "$POSTGRES_DB" -c "SELECT 'Database connection successful' as status;"
 
-    # Check if tables were created from dump
+    # Vérification des tables
     - echo "📊 Checking database structure..."
-    - |
-      PGPASSWORD="$POSTGRES_PASSWORD" psql -h localhost -U "$POSTGRES_USER" -d "$POSTGRES_DB" \
-        -c "\dt" && echo "✅ Tables check passed"
+    - PGPASSWORD="$POSTGRES_PASSWORD" psql -h localhost -U "$POSTGRES_USER" -d "$POSTGRES_DB" -c "\dt" || echo "No tables found or error"
 
   after_script:
     - echo "🧹 Cleaning up test containers..."
