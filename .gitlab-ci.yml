@@ -99,15 +99,22 @@ test_db:
     DOCKER_TLS_CERTDIR: ""
     POSTGRES_DB: "employeedb"
   before_script:
-    - apk add --no-cache postgresql-client
+    - apk add --no-cache postgresql-client git
     - docker info
+    # Récupérer le fichier SQL depuis la branche dump
+    - echo "📥 Fetching SQL file from dump branch..."
+    - git fetch origin dump
+    - git show origin/dump:db/employeedb_dump_pg15.sql > db/employeedb_dump_pg15.sql
+    - echo "✅ SQL file retrieved successfully"
+    - ls -la db/employeedb_dump_pg15.sql
   script:
     - echo "🔍 Testing database setup..."
+    - echo "📁 Current db directory contents:"
+    - ls -la db/
+    - test -f "db/employeedb_dump_pg15.sql" && echo "✅ SQL file exists" || echo "❌ SQL file missing"
+    - echo "🏗️ Building database image..."
     - docker build -t $DB_IMAGE:test ./db
     - echo "✅ Database image built successfully"
-    - echo "📁 Checking SQL file exists..."
-    - ls -la db/
-    - test -f db/employeedb_dump_pg15.sql && echo "✅ SQL dump exists" || echo "❌ SQL dump missing"
   rules:
     - if: '$CI_COMMIT_REF_NAME == "dev" || $CI_COMMIT_REF_NAME == "main"'
 
@@ -124,10 +131,27 @@ build_backend:
     BUILD_CONTEXT: "./backend"
 
 build_db:
-  <<: *build_template
+  image: docker:24
+  stage: build
+  services:
+    - docker:24-dind
   variables:
-    IMAGE_NAME: $DB_IMAGE
-    BUILD_CONTEXT: "./db"
+    DOCKER_TLS_CERTDIR: ""
+  before_script:
+    - docker info
+    # Récupérer le fichier SQL depuis la branche dump pour la construction
+    - echo "📥 Fetching SQL file from dump branch for build..."
+    - apk add --no-cache git
+    - git fetch origin dump
+    - git show origin/dump:db/employeedb_dump_pg15.sql > db/employeedb_dump_pg15.sql
+    - echo "✅ SQL file retrieved for build"
+    - ls -la db/employeedb_dump_pg15.sql
+  script:
+    - echo "🏗️ Building database image..."
+    - docker build -t $DB_IMAGE:$COMMIT_TAG -t $DB_IMAGE:latest ./db
+    - echo "✅ Database image built successfully"
+  rules:
+    - if: '$CI_COMMIT_REF_NAME == "dev" || $CI_COMMIT_REF_NAME == "main"'
 
 push_frontend:
   <<: *push_template
