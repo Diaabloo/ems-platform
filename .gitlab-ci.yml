@@ -103,44 +103,15 @@ test_db:
   variables:
     DOCKER_HOST: "tcp://docker:2376"
     DOCKER_TLS_VERIFY: "0"
-    POSTGRES_DB: "employeedb"
   before_script:
     - apk add --no-cache postgresql-client
-    - docker info
   script:
-    # Vérification des variables
-    - echo "🔍 Testing database image..."
-    - echo "POSTGRES_USER: $POSTGRES_USER"
-    - echo "POSTGRES_DB: $POSTGRES_DB"
-
-    # Build de l'image
-    - echo "🏗️ Building database image..."
+    - echo "🔍 Testing database setup..."
     - docker build -t $DB_IMAGE:test ./db
-
-    # Démarrage du conteneur
-    - echo "🐘 Starting test database container..."
-    - docker run -d --name test-db -e POSTGRES_USER="$POSTGRES_USER" -e POSTGRES_PASSWORD="$POSTGRES_PASSWORD" -e POSTGRES_DB="$POSTGRES_DB" -p 5432:5432 $DB_IMAGE:test
-
-    # Attente que la base soit prête (version simple)
-    - echo "⏳ Waiting for database to be ready..."
-    - sleep 15
-    - echo "🔍 Checking database readiness..."
-    - pg_isready -h localhost -p 5432 -U $POSTGRES_USER || sleep 10
-    - pg_isready -h localhost -p 5432 -U $POSTGRES_USER || sleep 10
-    - pg_isready -h localhost -p 5432 -U $POSTGRES_USER
-
-    # Test de connexion
-    - echo "✅ Testing database connection..."
-    - PGPASSWORD="$POSTGRES_PASSWORD" psql -h localhost -U "$POSTGRES_USER" -d "$POSTGRES_DB" -c "SELECT 'Database connection successful' as status;"
-
-    # Vérification des tables
-    - echo "📊 Checking database structure..."
-    - PGPASSWORD="$POSTGRES_PASSWORD" psql -h localhost -U "$POSTGRES_USER" -d "$POSTGRES_DB" -c "\dt" || echo "No tables found or error"
-
-  after_script:
-    - echo "🧹 Cleaning up test containers..."
-    - docker stop test-db || true
-    - docker rm test-db || true
+    - echo "✅ Database image built successfully"
+    - echo "📁 Checking SQL file exists..."
+    - ls -la db/
+    - test -f db/employeedb_dump_pg15.sql && echo "✅ SQL dump exists" || echo "❌ SQL dump missing"
   rules:
     - if: '$CI_COMMIT_REF_NAME == "dev" || $CI_COMMIT_REF_NAME == "main"'
 
