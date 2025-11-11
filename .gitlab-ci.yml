@@ -1,7 +1,6 @@
 stages:
   - test
-  - build
-  - push
+  - build_and_push
   - deploy
 
 variables:
@@ -75,9 +74,11 @@ test_db:
   rules:
     - if: '$CI_COMMIT_REF_NAME == "dev" || $CI_COMMIT_REF_NAME == "main"'
 
-build_frontend:
+# ----------- BUILD AND PUSH DANS LE MÊME JOB -----------
+
+build_and_push_frontend:
   image: docker:24
-  stage: build
+  stage: build_and_push
   services:
     - docker:24-dind
   variables:
@@ -87,12 +88,26 @@ build_frontend:
   script:
     - echo "🏗️ Building frontend image..."
     - docker build -t $FRONTEND_IMAGE:$COMMIT_TAG -t $FRONTEND_IMAGE:latest ./client
+
+    - echo "🔑 Logging into Docker Hub..."
+    - echo "$DOCKERHUB_TOKEN" | docker login -u "$DOCKERHUB_USERNAME" --password-stdin
+
+    - echo "📌 Pushing frontend image..."
+    - docker push $FRONTEND_IMAGE:$COMMIT_TAG
+    - docker push $FRONTEND_IMAGE:latest
+
+    - |
+      if [ "$CI_COMMIT_REF_NAME" = "main" ]; then
+        echo "📌 Tagging production version $VERSION_TAG"
+        docker tag $FRONTEND_IMAGE:$COMMIT_TAG $FRONTEND_IMAGE:$VERSION_TAG
+        docker push $FRONTEND_IMAGE:$VERSION_TAG
+      fi
   rules:
     - if: '$CI_COMMIT_REF_NAME == "dev" || $CI_COMMIT_REF_NAME == "main"'
 
-build_backend:
+build_and_push_backend:
   image: docker:24
-  stage: build
+  stage: build_and_push
   services:
     - docker:24-dind
   variables:
@@ -102,12 +117,26 @@ build_backend:
   script:
     - echo "🏗️ Building backend image..."
     - docker build -t $BACKEND_IMAGE:$COMMIT_TAG -t $BACKEND_IMAGE:latest ./backend
+
+    - echo "🔑 Logging into Docker Hub..."
+    - echo "$DOCKERHUB_TOKEN" | docker login -u "$DOCKERHUB_USERNAME" --password-stdin
+
+    - echo "📌 Pushing backend image..."
+    - docker push $BACKEND_IMAGE:$COMMIT_TAG
+    - docker push $BACKEND_IMAGE:latest
+
+    - |
+      if [ "$CI_COMMIT_REF_NAME" = "main" ]; then
+        echo "📌 Tagging production version $VERSION_TAG"
+        docker tag $BACKEND_IMAGE:$COMMIT_TAG $BACKEND_IMAGE:$VERSION_TAG
+        docker push $BACKEND_IMAGE:$VERSION_TAG
+      fi
   rules:
     - if: '$CI_COMMIT_REF_NAME == "dev" || $CI_COMMIT_REF_NAME == "main"'
 
-build_db:
+build_and_push_db:
   image: docker:24
-  stage: build
+  stage: build_and_push
   services:
     - docker:24-dind
   variables:
@@ -121,69 +150,20 @@ build_db:
   script:
     - echo "🏗️ Building database image..."
     - docker build -t $DB_IMAGE:$COMMIT_TAG -t $DB_IMAGE:latest ./db
-  rules:
-    - if: '$CI_COMMIT_REF_NAME == "dev" || $CI_COMMIT_REF_NAME == "main"'
 
-push_frontend:
-  image: docker:24
-  stage: push
-  services:
-    - docker:24-dind
-  variables:
-    DOCKER_TLS_CERTDIR: ""
-  script:
+    - echo "🔑 Logging into Docker Hub..."
     - echo "$DOCKERHUB_TOKEN" | docker login -u "$DOCKERHUB_USERNAME" --password-stdin
-    - echo "📌 Pushing frontend image..."
-    - docker push $FRONTEND_IMAGE:$COMMIT_TAG
-    - docker push $FRONTEND_IMAGE:latest
-    - if [ "$CI_COMMIT_REF_NAME" = "main" ]; then
-        docker tag $FRONTEND_IMAGE:$COMMIT_TAG $FRONTEND_IMAGE:$VERSION_TAG;
-        docker push $FRONTEND_IMAGE:$VERSION_TAG;
-      fi
-  dependencies:
-    - build_frontend
-  rules:
-    - if: '$CI_COMMIT_REF_NAME == "dev" || $CI_COMMIT_REF_NAME == "main"'
 
-push_backend:
-  image: docker:24
-  stage: push
-  services:
-    - docker:24-dind
-  variables:
-    DOCKER_TLS_CERTDIR: ""
-  script:
-    - echo "$DOCKERHUB_TOKEN" | docker login -u "$DOCKERHUB_USERNAME" --password-stdin
-    - echo "📌 Pushing backend image..."
-    - docker push $BACKEND_IMAGE:$COMMIT_TAG
-    - docker push $BACKEND_IMAGE:latest
-    - if [ "$CI_COMMIT_REF_NAME" = "main" ]; then
-        docker tag $BACKEND_IMAGE:$COMMIT_TAG $BACKEND_IMAGE:$VERSION_TAG;
-        docker push $BACKEND_IMAGE:$VERSION_TAG;
-      fi
-  dependencies:
-    - build_backend
-  rules:
-    - if: '$CI_COMMIT_REF_NAME == "dev" || $CI_COMMIT_REF_NAME == "main"'
-
-push_db:
-  image: docker:24
-  stage: push
-  services:
-    - docker:24-dind
-  variables:
-    DOCKER_TLS_CERTDIR: ""
-  script:
-    - echo "$DOCKERHUB_TOKEN" | docker login -u "$DOCKERHUB_USERNAME" --password-stdin
     - echo "📌 Pushing database image..."
     - docker push $DB_IMAGE:$COMMIT_TAG
     - docker push $DB_IMAGE:latest
-    - if [ "$CI_COMMIT_REF_NAME" = "main" ]; then
-        docker tag $DB_IMAGE:$COMMIT_TAG $DB_IMAGE:$VERSION_TAG;
-        docker push $DB_IMAGE:$VERSION_TAG;
+
+    - |
+      if [ "$CI_COMMIT_REF_NAME" = "main" ]; then
+        echo "📌 Tagging production version $VERSION_TAG"
+        docker tag $DB_IMAGE:$COMMIT_TAG $DB_IMAGE:$VERSION_TAG
+        docker push $DB_IMAGE:$VERSION_TAG
       fi
-  dependencies:
-    - build_db
   rules:
     - if: '$CI_COMMIT_REF_NAME == "dev" || $CI_COMMIT_REF_NAME == "main"'
 
