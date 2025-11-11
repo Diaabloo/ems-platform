@@ -54,28 +54,6 @@ cache:
   rules:
     - if: '$CI_COMMIT_REF_NAME == "dev" || $CI_COMMIT_REF_NAME == "main"'
 
-.push_template: &push_template
-  image: docker:24
-  stage: push
-  services:
-    - docker:24-dind
-  variables:
-    DOCKER_TLS_CERTDIR: ""
-  before_script:
-    - echo "$DOCKERHUB_TOKEN" | docker login -u "$DOCKERHUB_USERNAME" --password-stdin
-  script:
-    - echo "📌 Pushing $IMAGE_NAME"
-    - docker push $IMAGE_NAME:$COMMIT_TAG
-    - docker push $IMAGE_NAME:latest
-    - |
-      if [ "$CI_COMMIT_REF_NAME" = "main" ]; then
-        echo "📌 Tagging production version $VERSION_TAG"
-        docker tag $IMAGE_NAME:$COMMIT_TAG $IMAGE_NAME:$VERSION_TAG
-        docker push $IMAGE_NAME:$VERSION_TAG
-      fi
-  rules:
-    - if: '$CI_COMMIT_REF_NAME == "dev" || $CI_COMMIT_REF_NAME == "main"'
-
 # ----------- Jobs -----------
 
 test_frontend:
@@ -153,26 +131,85 @@ build_db:
   rules:
     - if: '$CI_COMMIT_REF_NAME == "dev" || $CI_COMMIT_REF_NAME == "main"'
 
+# ----------- JOBS PUSH SANS TEMPLATE -----------
+
 push_frontend:
-  <<: *push_template
+  image: docker:24
+  stage: push
+  services:
+    - docker:24-dind
   variables:
-    IMAGE_NAME: $FRONTEND_IMAGE
+    DOCKER_TLS_CERTDIR: ""
+  before_script:
+    - echo "🔑 Logging into Docker Hub..."
+    - echo "DOCKERHUB_USERNAME: $DOCKERHUB_USERNAME"
+    - echo "$DOCKERHUB_TOKEN" | docker login -u "$DOCKERHUB_USERNAME" --password-stdin
+  script:
+    - echo "📌 Pushing $FRONTEND_IMAGE"
+    - docker push $FRONTEND_IMAGE:$COMMIT_TAG
+    - docker push $FRONTEND_IMAGE:latest
+    - |
+      if [ "$CI_COMMIT_REF_NAME" = "main" ]; then
+        echo "📌 Tagging production version $VERSION_TAG"
+        docker tag $FRONTEND_IMAGE:$COMMIT_TAG $FRONTEND_IMAGE:$VERSION_TAG
+        docker push $FRONTEND_IMAGE:$VERSION_TAG
+      fi
   dependencies:
     - build_frontend
+  rules:
+    - if: '$CI_COMMIT_REF_NAME == "dev" || $CI_COMMIT_REF_NAME == "main"'
 
 push_backend:
-  <<: *push_template
+  image: docker:24
+  stage: push
+  services:
+    - docker:24-dind
   variables:
-    IMAGE_NAME: $BACKEND_IMAGE
+    DOCKER_TLS_CERTDIR: ""
+  before_script:
+    - echo "🔑 Logging into Docker Hub..."
+    - echo "DOCKERHUB_USERNAME: $DOCKERHUB_USERNAME"
+    - echo "$DOCKERHUB_TOKEN" | docker login -u "$DOCKERHUB_USERNAME" --password-stdin
+  script:
+    - echo "📌 Pushing $BACKEND_IMAGE"
+    - docker push $BACKEND_IMAGE:$COMMIT_TAG
+    - docker push $BACKEND_IMAGE:latest
+    - |
+      if [ "$CI_COMMIT_REF_NAME" = "main" ]; then
+        echo "📌 Tagging production version $VERSION_TAG"
+        docker tag $BACKEND_IMAGE:$COMMIT_TAG $BACKEND_IMAGE:$VERSION_TAG
+        docker push $BACKEND_IMAGE:$VERSION_TAG
+      fi
   dependencies:
     - build_backend
+  rules:
+    - if: '$CI_COMMIT_REF_NAME == "dev" || $CI_COMMIT_REF_NAME == "main"'
 
 push_db:
-  <<: *push_template
+  image: docker:24
+  stage: push
+  services:
+    - docker:24-dind
   variables:
-    IMAGE_NAME: $DB_IMAGE
+    DOCKER_TLS_CERTDIR: ""
+  before_script:
+    - echo "🔑 Logging into Docker Hub..."
+    - echo "DOCKERHUB_USERNAME: $DOCKERHUB_USERNAME"
+    - echo "$DOCKERHUB_TOKEN" | docker login -u "$DOCKERHUB_USERNAME" --password-stdin
+  script:
+    - echo "📌 Pushing $DB_IMAGE"
+    - docker push $DB_IMAGE:$COMMIT_TAG
+    - docker push $DB_IMAGE:latest
+    - |
+      if [ "$CI_COMMIT_REF_NAME" = "main" ]; then
+        echo "📌 Tagging production version $VERSION_TAG"
+        docker tag $DB_IMAGE:$COMMIT_TAG $DB_IMAGE:$VERSION_TAG
+        docker push $DB_IMAGE:$VERSION_TAG
+      fi
   dependencies:
     - build_db
+  rules:
+    - if: '$CI_COMMIT_REF_NAME == "dev" || $CI_COMMIT_REF_NAME == "main"'
 
 deploy_production:
   stage: deploy
