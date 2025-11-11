@@ -131,7 +131,7 @@ build_db:
   rules:
     - if: '$CI_COMMIT_REF_NAME == "dev" || $CI_COMMIT_REF_NAME == "main"'
 
-# ----------- JOBS PUSH SANS TEMPLATE -----------
+# ----------- JOBS PUSH CORRIGÉS -----------
 
 push_frontend:
   image: docker:24
