@@ -105,7 +105,7 @@ test_db:
     DOCKER_TLS_VERIFY: "0"
     POSTGRES_DB: "employeedb"
   before_script:
-    - apk add --no-cache postgresql-client bash
+    - apk add --no-cache postgresql-client
     - docker info
   script:
     # Vérification des variables
@@ -121,17 +121,13 @@ test_db:
     - echo "🐘 Starting test database container..."
     - docker run -d --name test-db -e POSTGRES_USER="$POSTGRES_USER" -e POSTGRES_PASSWORD="$POSTGRES_PASSWORD" -e POSTGRES_DB="$POSTGRES_DB" -p 5432:5432 $DB_IMAGE:test
 
-    # Attente que la base soit prête
+    # Attente que la base soit prête (version simple)
     - echo "⏳ Waiting for database to be ready..."
-    - |
-      for i in {1..30}; do
-        if pg_isready -h localhost -p 5432 -U $POSTGRES_USER; then
-          echo "✅ Database is ready!"
-          break
-        fi
-        echo "⏱️ Waiting... attempt $i/30"
-        sleep 2
-      done
+    - sleep 15
+    - echo "🔍 Checking database readiness..."
+    - pg_isready -h localhost -p 5432 -U $POSTGRES_USER || sleep 10
+    - pg_isready -h localhost -p 5432 -U $POSTGRES_USER || sleep 10
+    - pg_isready -h localhost -p 5432 -U $POSTGRES_USER
 
     # Test de connexion
     - echo "✅ Testing database connection..."
@@ -194,12 +190,7 @@ deploy_production:
     - apk add --no-cache openssh-client
   script:
     - echo "🚀 Deploying to production server..."
-    - |
-      ssh -o StrictHostKeyChecking=no $DEPLOY_USER@$DEPLOY_SERVER "
-        cd $DEPLOY_PATH &&
-        docker-compose pull &&
-        docker-compose up -d
-      "
+    - 'ssh -o StrictHostKeyChecking=no $DEPLOY_USER@$DEPLOY_SERVER "cd $DEPLOY_PATH && docker-compose pull && docker-compose up -d"'
   environment:
     name: production
     url: https://your-production-url.com
