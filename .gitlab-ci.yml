@@ -62,8 +62,6 @@ cache:
   variables:
     DOCKER_TLS_CERTDIR: ""
   before_script:
-    - echo "🔑 Logging into Docker Hub..."
-    - echo "Username: $DOCKERHUB_USERNAME"
     - echo "$DOCKERHUB_TOKEN" | docker login -u "$DOCKERHUB_USERNAME" --password-stdin
   script:
     - echo "📌 Pushing $IMAGE_NAME"
