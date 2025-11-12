@@ -67,7 +67,7 @@ cache:
 # =============================================
 
 # Frontend Build Validation
-frontend_build:
+lint_frontend:
   stage: validate
   image: node:${NODE_VERSION}
   variables:
@@ -90,7 +90,7 @@ frontend_build:
         - client/**/*
 
 # Backend Build Validation
-backend_build:
+lint_backend:
   stage: validate
   image: node:${NODE_VERSION}
   script:
@@ -212,11 +212,12 @@ frontend_tests:
     - cd client
     - echo "🧪 Running frontend tests..."
     - |
-      if npm run | grep -q "test"; then
+      # Check if test script exists and doesn't just print error
+      if npm run | grep -q "test" && ! npm run test -- --dry-run 2>&1 | grep -q "Error: no test specified"; then
         npm test -- --coverage --watchAll=false
         echo "✅ Frontend tests passed"
       else
-        echo "⚠️  No test script found, skipping tests"
+        echo "⚠️  No valid test script found, skipping tests"
       fi
   artifacts:
     when: always
@@ -235,21 +236,19 @@ backend_tests:
     - cd backend
     - echo "🧪 Running backend tests..."
     - |
-      if npm run | grep -q "test"; then
+      # Check if test script exists and doesn't just print error
+      if npm run | grep -q "test" && ! npm run test -- --dry-run 2>&1 | grep -q "Error: no test specified"; then
         npm test -- --coverage --watchAll=false
         echo "✅ Backend tests passed"
       else
-        echo "⚠️  No test script found, skipping tests"
+        echo "⚠️  No valid test script found, skipping tests"
+        echo "💡 To add tests, create a proper test script in backend/package.json"
       fi
-  artifacts:
-    when: always
-    paths:
-      - backend/coverage/
   rules:
     - if: '$CI_COMMIT_REF_NAME == "dev" || $CI_COMMIT_REF_NAME == "main"'
 
-# Database Migration Tests
-database_migrations:
+# Database Schema Validation
+database_schema_validation:
   stage: test
   image: node:${NODE_VERSION}
   services:
@@ -263,10 +262,16 @@ database_migrations:
     - cd backend
     - npm ci
     - npx prisma generate
-    - echo "🗄️ Testing database migrations..."
-    - npx prisma migrate reset --force
-    - npx prisma migrate dev --name ci-test
-    - echo "✅ Database migrations completed successfully"
+    - echo "🗄️ Validating database schema..."
+    - npx prisma validate
+    - echo "✅ Database schema is valid"
+    - echo "🗄️ Testing database connection and migrations..."
+    - npx prisma migrate reset --force --skip-seed
+    - npx prisma migrate deploy
+    - echo "✅ Database migrations applied successfully"
+    - echo "🗄️ Generating Prisma Client..."
+    - npx prisma generate
+    - echo "✅ Database setup completed successfully"
   rules:
     - if: '$CI_COMMIT_REF_NAME == "dev" || $CI_COMMIT_REF_NAME == "main"'
     - changes:

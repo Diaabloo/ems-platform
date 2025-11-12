@@ -4,12 +4,17 @@
   "description": "",
   "main": "index.js",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1",
+    "test": "jest --coverage --watchAll=false",
+    "test:watch": "jest --watch",
+    "test:integration": "jest --testPathPattern=integration --coverage",
     "start": "node index.js",
     "dev": "nodemon index.js",
     "migrate": "prisma migrate deploy",
     "import:employees": "tsx scripts/import-employees.ts",
-    "backup": "pg_dump -h localhost -p 5432 -U postgres -d employeedb > C:\\Users\\XPS\\Desktop\\AGE\\backups\\full_backup_$(date +%Y-%m-%d).sql"
+    "backup": "pg_dump -h localhost -p 5432 -U postgres -d employeedb > C:\\Users\\XPS\\Desktop\\AGE\\backups\\full_backup_$(date +%Y-%m-%d).sql",
+    "lint": "eslint src/ --ext .js,.jsx,.ts,.tsx",
+    "lint:fix": "eslint src/ --ext .js,.jsx,.ts,.tsx --fix",
+    "type-check": "tsc --noEmit"
   },
   "keywords": [],
   "author": "",
@@ -31,8 +36,14 @@
     "typescript": "^5.9.3"
   },
   "devDependencies": {
+    "@types/jest": "^30.0.0",
+    "@typescript-eslint/eslint-plugin": "^8.46.4",
+    "@typescript-eslint/parser": "^8.46.4",
+    "eslint": "^9.39.1",
+    "jest": "^30.2.0",
     "nodemon": "^3.1.10",
     "prisma": "^6.17.1",
+    "ts-jest": "^29.4.5",
     "tsx": "^4.20.6"
   }
 }
