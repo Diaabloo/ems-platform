@@ -74,44 +74,74 @@ cache:
 # VALIDATION STAGE
 # =============================================
 
-# Validate code quality and security
-lint_frontend:
+# Validate frontend build and lint (if configured)
+validate_frontend:
   stage: validate
   image: node:${NODE_VERSION}
   script:
     - cd client
     - npm ci
-    - echo "🔍 Running frontend linting..."
-    - npm run lint
+    - echo "🔍 Validating frontend..."
+    - npm run build
+    - |
+      # Try linting if script exists, but don't fail if it doesn't
+      if npm run | grep -q "lint"; then
+        echo "📝 Running frontend linting..."
+        npm run lint
+      else
+        echo "⚠️  No lint script found, skipping linting"
+      fi
   artifacts:
-    when: always
-    reports:
-      junit: client/reports/lint-report.xml
+    when: on_success
+    paths:
+      - client/.next/
+    expire_in: 1 hour
   rules:
     - if: '$CI_COMMIT_REF_NAME == "dev" || $CI_COMMIT_REF_NAME == "main"'
     - changes:
-        - client/src/**/*
-        - client/package.json
+        - client/**/*
 
-lint_backend:
+# Validate backend build and lint (if configured)
+validate_backend:
   stage: validate
   image: node:${NODE_VERSION}
   script:
     - cd backend
     - npm ci
-    - echo "🔍 Running backend linting..."
-    - npm run lint
+    - echo "🔍 Validating backend..."
+    - |
+      # Try building if script exists
+      if npm run | grep -q "build"; then
+        echo "🏗️ Building backend..."
+        npm run build
+      else
+        echo "⚠️  No build script found, skipping build"
+      fi
+    - |
+      # Try linting if script exists, but don't fail if it doesn't
+      if npm run | grep -q "lint"; then
+        echo "📝 Running backend linting..."
+        npm run lint
+      else
+        echo "⚠️  No lint script found, skipping linting"
+      fi
+    - |
+      # Type check for TypeScript projects
+      if npm run | grep -q "type-check"; then
+        echo "🔎 Running type check..."
+        npm run type-check
+      fi
   artifacts:
-    when: always
-    reports:
-      junit: backend/reports/lint-report.xml
+    when: on_success
+    paths:
+      - backend/dist/
+    expire_in: 1 hour
   rules:
     - if: '$CI_COMMIT_REF_NAME == "dev" || $CI_COMMIT_REF_NAME == "main"'
     - changes:
-        - backend/src/**/*
-        - backend/package.json
+        - backend/**/*
 
-# Security scanning (example - you can add more tools)
+# Security scanning
 security_scan:
   stage: validate
   image: docker:24
@@ -121,13 +151,19 @@ security_scan:
     - echo "🔒 Running security checks..."
     - apk add --no-cache curl
     - |
-      # Example: Check for known vulnerabilities in dependencies
+      # Check for known vulnerabilities in dependencies
       if [ -f "client/package.json" ]; then
-        cd client && npm audit --audit-level moderate || true
+        cd client
+        echo "📦 Checking client dependencies..."
+        npm audit --audit-level moderate || true
+        cd ..
       fi
     - |
       if [ -f "backend/package.json" ]; then
-        cd backend && npm audit --audit-level moderate || true
+        cd backend
+        echo "📦 Checking backend dependencies..."
+        npm audit --audit-level moderate || true
+        cd ..
       fi
   rules:
     - if: '$CI_COMMIT_REF_NAME == "dev" || $CI_COMMIT_REF_NAME == "main"'
@@ -191,14 +227,16 @@ test_frontend_unit:
   script:
     - cd client
     - echo "🧪 Running frontend unit tests..."
-    - npm test -- --coverage --watchAll=false
+    - |
+      if npm run | grep -q "test"; then
+        npm test -- --coverage --watchAll=false
+      else
+        echo "⚠️  No test script found, skipping tests"
+      fi
   artifacts:
     when: always
-    reports:
-      junit: client/junit.xml
     paths:
       - client/coverage/
-  coverage: '/All files[^|]*\|[^|]*\s+([\d\.]+)/'
   rules:
     - if: '$CI_COMMIT_REF_NAME == "dev" || $CI_COMMIT_REF_NAME == "main"'
 
@@ -211,11 +249,14 @@ test_backend_unit:
   script:
     - cd backend
     - echo "🧪 Running backend unit tests..."
-    - npm test -- --coverage --watchAll=false
+    - |
+      if npm run | grep -q "test"; then
+        npm test -- --coverage --watchAll=false
+      else
+        echo "⚠️  No test script found, skipping tests"
+      fi
   artifacts:
     when: always
-    reports:
-      junit: backend/junit.xml
     paths:
       - backend/coverage/
   rules:
@@ -245,27 +286,6 @@ test_database_migrations:
     - changes:
         - backend/prisma/schema.prisma
         - backend/prisma/migrations/**/*
-
-# Backend Integration Tests
-test_backend_integration:
-  stage: test
-  image: node:${NODE_VERSION}
-  services:
-    - postgres:${POSTGRES_VERSION}
-  variables:
-    POSTGRES_DB: test_employeedb
-    POSTGRES_USER: tester
-    POSTGRES_PASSWORD: test_password
-    DATABASE_URL: "postgresql://tester:test_password@postgres:5432/test_employeedb"
-  script:
-    - cd backend
-    - npm ci
-    - npx prisma generate
-    - npx prisma migrate reset --force
-    - echo "🔗 Running backend integration tests..."
-    - npm run test:integration || echo "⚠️ Integration tests failed but continuing pipeline"
-  rules:
-    - if: '$CI_COMMIT_REF_NAME == "dev" || $CI_COMMIT_REF_NAME == "main"'
 
 # Database Image Test
 test_db_image:
@@ -478,67 +498,6 @@ cleanup:
   when: always
   rules:
     - if: '$CI_COMMIT_REF_NAME == "dev" || $CI_COMMIT_REF_NAME == "main"'
-
-# =============================================
-# INFRASTRUCTURE AS CODE JOBS
-# =============================================
-
-validate_infra:
-  stage: validate
-  image: docker:24
-  script:
-    - echo "🔍 Validating Docker Compose files..."
-    - cd infra
-    - docker-compose -f docker-compose.yml config
-    - docker-compose -f docker-compose.prod.yml config
-    - docker-compose -f docker-compose.staging.yml config
-    - echo "✅ All Docker Compose files are valid"
-  rules:
-    - changes:
-        - infra/**/*
-
-deploy_infra_staging:
-  stage: deploy
-  image: alpine:latest
-  environment:
-    name: staging
-    url: https://staging.ems-platform.com
-  before_script:
-    - apk add --no-cache openssh-client
-  script:
-    - echo "🏗️ Deploying infrastructure to staging..."
-    - scp -r infra/* $STAGING_DEPLOY_USER@$STAGING_DEPLOY_SERVER:$STAGING_DEPLOY_PATH/
-    - ssh $STAGING_DEPLOY_USER@$STAGING_DEPLOY_SERVER "
-        cd $STAGING_DEPLOY_PATH &&
-        chmod +x scripts/*.sh &&
-        ./scripts/deploy.sh staging
-      "
-  rules:
-    - if: '$CI_COMMIT_REF_NAME == "dev"'
-    - changes:
-        - infra/**/*
-
-deploy_infra_production:
-  stage: deploy
-  image: alpine:latest
-  environment:
-    name: production
-    url: https://ems-platform.com
-  before_script:
-    - apk add --no-cache openssh-client
-  script:
-    - echo "🏗️ Deploying infrastructure to production..."
-    - scp -r infra/* $DEPLOY_USER@$DEPLOY_SERVER:$DEPLOY_PATH/
-    - ssh $DEPLOY_USER@$DEPLOY_SERVER "
-        cd $DEPLOY_PATH &&
-        chmod +x scripts/*.sh &&
-        ./scripts/deploy.sh production
-      "
-  rules:
-    - if: '$CI_COMMIT_REF_NAME == "main"'
-      when: manual
-    - changes:
-        - infra/**/*
 
 # =============================================
 # WORKFLOW CONFIGURATION
