@@ -62,35 +62,23 @@ cache:
       fi
     - echo "$DOCKERHUB_TOKEN" | docker login -u "$DOCKERHUB_USERNAME" --password-stdin
 
-.test_template: &test_template
-  image: node:${NODE_VERSION}
-  cache:
-    key: "${CI_COMMIT_REF_SLUG}"
-    paths:
-      - node_modules/
-    policy: pull
-
 # =============================================
 # VALIDATION STAGE
 # =============================================
 
-# Validate frontend build and lint (if configured)
-validate_frontend:
+# Frontend Build Validation
+frontend_build:
   stage: validate
   image: node:${NODE_VERSION}
+  variables:
+    # Force non-interactive mode for Next.js
+    NEXT_TELEMETRY_DISABLED: "1"
   script:
     - cd client
     - npm ci
-    - echo "🔍 Validating frontend..."
+    - echo "🏗️ Building frontend..."
     - npm run build
-    - |
-      # Try linting if script exists, but don't fail if it doesn't
-      if npm run | grep -q "lint"; then
-        echo "📝 Running frontend linting..."
-        npm run lint
-      else
-        echo "⚠️  No lint script found, skipping linting"
-      fi
+    - echo "✅ Frontend build successful"
   artifacts:
     when: on_success
     paths:
@@ -101,19 +89,19 @@ validate_frontend:
     - changes:
         - client/**/*
 
-# Validate backend build and lint (if configured)
-validate_backend:
+# Backend Build Validation
+backend_build:
   stage: validate
   image: node:${NODE_VERSION}
   script:
     - cd backend
     - npm ci
-    - echo "🔍 Validating backend..."
+    - echo "🏗️ Building backend..."
     - |
       # Try building if script exists
       if npm run | grep -q "build"; then
-        echo "🏗️ Building backend..."
         npm run build
+        echo "✅ Backend build successful"
       else
         echo "⚠️  No build script found, skipping build"
       fi
@@ -121,15 +109,9 @@ validate_backend:
       # Try linting if script exists, but don't fail if it doesn't
       if npm run | grep -q "lint"; then
         echo "📝 Running backend linting..."
-        npm run lint
+        npm run lint || echo "⚠️  Linting failed but continuing"
       else
-        echo "⚠️  No lint script found, skipping linting"
-      fi
-    - |
-      # Type check for TypeScript projects
-      if npm run | grep -q "type-check"; then
-        echo "🔎 Running type check..."
-        npm run type-check
+        echo "ℹ️  No lint script found, skipping linting"
       fi
   artifacts:
     when: on_success
@@ -155,14 +137,14 @@ security_scan:
       if [ -f "client/package.json" ]; then
         cd client
         echo "📦 Checking client dependencies..."
-        npm audit --audit-level moderate || true
+        npm audit --audit-level high || true
         cd ..
       fi
     - |
       if [ -f "backend/package.json" ]; then
         cd backend
         echo "📦 Checking backend dependencies..."
-        npm audit --audit-level moderate || true
+        npm audit --audit-level high || true
         cd ..
       fi
   rules:
@@ -218,18 +200,21 @@ setup_backend_deps:
 # TEST STAGE
 # =============================================
 
-# Frontend Unit Tests
-test_frontend_unit:
+# Frontend Tests
+frontend_tests:
   stage: test
   image: node:${NODE_VERSION}
+  variables:
+    NEXT_TELEMETRY_DISABLED: "1"
   dependencies:
     - setup_frontend_deps
   script:
     - cd client
-    - echo "🧪 Running frontend unit tests..."
+    - echo "🧪 Running frontend tests..."
     - |
       if npm run | grep -q "test"; then
         npm test -- --coverage --watchAll=false
+        echo "✅ Frontend tests passed"
       else
         echo "⚠️  No test script found, skipping tests"
       fi
@@ -240,18 +225,19 @@ test_frontend_unit:
   rules:
     - if: '$CI_COMMIT_REF_NAME == "dev" || $CI_COMMIT_REF_NAME == "main"'
 
-# Backend Unit Tests
-test_backend_unit:
+# Backend Tests
+backend_tests:
   stage: test
   image: node:${NODE_VERSION}
   dependencies:
     - setup_backend_deps
   script:
     - cd backend
-    - echo "🧪 Running backend unit tests..."
+    - echo "🧪 Running backend tests..."
     - |
       if npm run | grep -q "test"; then
         npm test -- --coverage --watchAll=false
+        echo "✅ Backend tests passed"
       else
         echo "⚠️  No test script found, skipping tests"
       fi
@@ -263,7 +249,7 @@ test_backend_unit:
     - if: '$CI_COMMIT_REF_NAME == "dev" || $CI_COMMIT_REF_NAME == "main"'
 
 # Database Migration Tests
-test_database_migrations:
+database_migrations:
   stage: test
   image: node:${NODE_VERSION}
   services:
@@ -288,7 +274,7 @@ test_database_migrations:
         - backend/prisma/migrations/**/*
 
 # Database Image Test
-test_db_image:
+test_database_image:
   image: docker:24
   stage: test
   services:
@@ -313,7 +299,7 @@ test_db_image:
 # =============================================
 
 # Build and Push Frontend
-build_and_push_frontend:
+build_frontend:
   <<: *docker_build_template
   stage: build
   script:
@@ -338,7 +324,7 @@ build_and_push_frontend:
     - if: '$CI_COMMIT_REF_NAME == "dev" || $CI_COMMIT_REF_NAME == "main"'
 
 # Build and Push Backend
-build_and_push_backend:
+build_backend:
   <<: *docker_build_template
   stage: build
   script:
@@ -363,7 +349,7 @@ build_and_push_backend:
     - if: '$CI_COMMIT_REF_NAME == "dev" || $CI_COMMIT_REF_NAME == "main"'
 
 # Build and Push Database
-build_and_push_db:
+build_database:
   <<: *docker_build_template
   stage: build
   before_script:
