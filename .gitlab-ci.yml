@@ -61,6 +61,20 @@ cache:
         exit 1
       fi
     - echo "$DOCKERHUB_TOKEN" | docker login -u "$DOCKERHUB_USERNAME" --password-stdin
+  tags:
+    - windows
+    - local
+
+.test_template: &test_template
+  image: node:${NODE_VERSION}
+  cache:
+    key: "${CI_COMMIT_REF_SLUG}"
+    paths:
+      - node_modules/
+    policy: pull
+  tags:
+    - windows
+    - local
 
 # =============================================
 # VALIDATION STAGE
@@ -71,7 +85,6 @@ lint_frontend:
   stage: validate
   image: node:${NODE_VERSION}
   variables:
-    # Force non-interactive mode for Next.js
     NEXT_TELEMETRY_DISABLED: "1"
   script:
     - cd client
@@ -88,6 +101,9 @@ lint_frontend:
     - if: '$CI_COMMIT_REF_NAME == "dev" || $CI_COMMIT_REF_NAME == "main"'
     - changes:
         - client/**/*
+  tags:
+    - windows
+    - local
 
 # Backend Build Validation
 lint_backend:
@@ -122,6 +138,9 @@ lint_backend:
     - if: '$CI_COMMIT_REF_NAME == "dev" || $CI_COMMIT_REF_NAME == "main"'
     - changes:
         - backend/**/*
+  tags:
+    - windows
+    - local
 
 # Security scanning
 security_scan:
@@ -149,6 +168,9 @@ security_scan:
       fi
   rules:
     - if: '$CI_COMMIT_REF_NAME == "dev" || $CI_COMMIT_REF_NAME == "main"'
+  tags:
+    - windows
+    - local
 
 # =============================================
 # DEPENDENCY SETUP (Optimized caching)
@@ -173,6 +195,9 @@ setup_frontend_deps:
     - changes:
         - client/package-lock.json
         - client/package.json
+  tags:
+    - windows
+    - local
 
 setup_backend_deps:
   stage: validate
@@ -195,6 +220,9 @@ setup_backend_deps:
         - backend/package-lock.json
         - backend/package.json
         - backend/prisma/schema.prisma
+  tags:
+    - windows
+    - local
 
 # =============================================
 # TEST STAGE
@@ -225,6 +253,9 @@ frontend_tests:
       - client/coverage/
   rules:
     - if: '$CI_COMMIT_REF_NAME == "dev" || $CI_COMMIT_REF_NAME == "main"'
+  tags:
+    - windows
+    - local
 
 # Backend Tests - Version robuste
 backend_tests:
@@ -242,23 +273,19 @@ backend_tests:
         exit 0
       fi
 
-      # Créer le dossier de tests s'il n'existe pas
-      mkdir -p src/__tests__
-
       # Lancer les tests avec gestion d'erreur
       echo "🔧 Running Jest tests..."
-      if npm test; then
-        echo "✅ Backend tests completed successfully"
+      if npm run test:ci; then
+        echo "✅ Backend tests passed"
       else
         echo "⚠️  Tests failed or no tests found, but continuing pipeline"
         echo "💡 Consider adding tests in src/__tests__/ directory"
       fi
-  artifacts:
-    when: always
-    paths:
-      - backend/coverage/
   rules:
     - if: '$CI_COMMIT_REF_NAME == "dev" || $CI_COMMIT_REF_NAME == "main"'
+  tags:
+    - windows
+    - local
 
 # Database Schema Validation
 database_schema_validation:
@@ -290,6 +317,9 @@ database_schema_validation:
     - changes:
         - backend/prisma/schema.prisma
         - backend/prisma/migrations/**/*
+  tags:
+    - windows
+    - local
 
 # Database Image Test
 test_database_image:
@@ -311,6 +341,9 @@ test_database_image:
     - echo "✅ Database image built successfully"
   rules:
     - if: '$CI_COMMIT_REF_NAME == "dev" || $CI_COMMIT_REF_NAME == "main"'
+  tags:
+    - windows
+    - local
 
 # =============================================
 # BUILD STAGE
@@ -436,6 +469,9 @@ deploy_staging:
       "
   rules:
     - if: '$CI_COMMIT_REF_NAME == "dev"'
+  tags:
+    - windows
+    - local
 
 # Production Deployment (Manual approval required)
 deploy_production:
@@ -481,6 +517,9 @@ deploy_production:
   rules:
     - if: '$CI_COMMIT_REF_NAME == "main"'
       when: manual
+  tags:
+    - windows
+    - local
 
 # =============================================
 # POST-CLEANUP STAGE
@@ -502,6 +541,9 @@ cleanup:
   when: always
   rules:
     - if: '$CI_COMMIT_REF_NAME == "dev" || $CI_COMMIT_REF_NAME == "main"'
+  tags:
+    - windows
+    - local
 
 # =============================================
 # WORKFLOW CONFIGURATION
