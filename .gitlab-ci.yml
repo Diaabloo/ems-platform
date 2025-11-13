@@ -1,13 +1,17 @@
-# .gitlab-ci.yml - VERSION COMPLÈTE 14 JOBS CORRIGÉS
-# Tous les problèmes résolus + 14 jobs comme l'original
+# .gitlab-ci.yml - OPTIMIZED FOR WINDOWS RUNNER
+# 14 jobs - Fixed artifacts and cache issues
 
 stages:
-  - dependencies
-  - validate
-  - test
-  - build
-  - deploy
-  - cleanup
+  - dependencies  # Dependency installation
+  - validate      # Code validation and security
+  - test          # Unit and integration tests
+  - build         # Docker image building
+  - deploy        # Staging and production deployment
+  - cleanup       # Cleanup operations
+
+# =============================================
+# Global Variables
+# =============================================
 
 variables:
   DOCKER_TLS_CERTDIR: ""
@@ -20,10 +24,11 @@ variables:
   BACKEND_IMAGE: "amineelalami/ems-platform-backend"
   DB_IMAGE: "amineelalami/ems-platform-db"
 
+  # Optimized tags
   COMMIT_TAG: "sha-${CI_COMMIT_SHORT_SHA}"
 
 # =============================================
-# Cache Configuration - CORRIGÉ
+# Cache Configuration - FIXED
 # =============================================
 
 cache:
@@ -34,7 +39,7 @@ cache:
   policy: pull-push
 
 # =============================================
-# Templates Optimisés
+# Job Templates
 # =============================================
 
 .docker_build_template: &docker_build_template
@@ -72,19 +77,17 @@ install_frontend_deps:
   <<: *node_template
   script:
     - cd client
-    - echo "📦 Installation frontend..."
+    - echo "📦 Installing frontend dependencies..."
+    # Clean installation to avoid EPERM errors on Windows
     - if (Test-Path "node_modules") { Remove-Item -Recurse -Force node_modules }
     - npm ci --no-audit --prefer-offline
-    - echo "✅ Dépendances frontend installées"
+    - echo "✅ Frontend dependencies installed"
   cache:
     key: "${CI_COMMIT_REF_SLUG}-frontend"
     paths:
       - client/node_modules/
     policy: pull-push
-  artifacts:
-    paths:
-      - client/node_modules/
-    expire_in: 1 hour
+  # ⚠️ REMOVED ARTIFACTS - using cache only
   rules:
     - if: '$CI_COMMIT_REF_NAME == "dev" || $CI_COMMIT_REF_NAME == "main"'
     - changes:
@@ -96,20 +99,17 @@ install_backend_deps:
   <<: *node_template
   script:
     - cd backend
-    - echo "📦 Installation backend..."
+    - echo "📦 Installing backend dependencies..."
     - if (Test-Path "node_modules") { Remove-Item -Recurse -Force node_modules }
     - npm ci --no-audit --prefer-offline
     - npx prisma generate
-    - echo "✅ Dépendances backend installées"
+    - echo "✅ Backend dependencies installed"
   cache:
     key: "${CI_COMMIT_REF_SLUG}-backend"
     paths:
       - backend/node_modules/
     policy: pull-push
-  artifacts:
-    paths:
-      - backend/node_modules/
-    expire_in: 1 hour
+  # ⚠️ REMOVED ARTIFACTS - using cache only
   rules:
     - if: '$CI_COMMIT_REF_NAME == "dev" || $CI_COMMIT_REF_NAME == "main"'
     - changes:
@@ -124,15 +124,17 @@ install_backend_deps:
 validate_frontend:
   stage: validate
   <<: *node_template
-  dependencies:
-    - install_frontend_deps
+  # ⚠️ REMOVED DEPENDENCIES - using cache instead
   script:
     - cd client
-    - echo "🔍 Validation frontend..."
-    # Vérification SIMPLIFIÉE que node_modules existe
-    - if (!(Test-Path "node_modules")) { echo "❌ node_modules manquant"; exit 1 }
+    - echo "🔍 Validating frontend..."
+    # Check if node_modules exists, reinstall if cache failed
+    - if (!(Test-Path "node_modules")) {
+        echo "❌ Cache missing - reinstalling dependencies..."
+        npm ci --no-audit --prefer-offline
+      }
     - npm run build
-    - echo "✅ Frontend validé"
+    - echo "✅ Frontend validation successful"
   rules:
     - if: '$CI_COMMIT_REF_NAME == "dev" || $CI_COMMIT_REF_NAME == "main"'
     - changes:
@@ -143,15 +145,18 @@ validate_frontend:
 validate_backend:
   stage: validate
   <<: *node_template
-  dependencies:
-    - install_backend_deps
+  # ⚠️ REMOVED DEPENDENCIES - using cache instead
   script:
     - cd backend
-    - echo "🔍 Validation backend..."
-    # Syntaxe PowerShell SIMPLIFIÉE et robuste
+    - echo "🔍 Validating backend..."
+    - if (!(Test-Path "node_modules")) {
+        echo "❌ Cache missing - reinstalling dependencies..."
+        npm ci --no-audit --prefer-offline
+      }
+    # Fixed PowerShell syntax
     - $buildScript = npm run | Select-String "build"
     - if ($buildScript) { npm run build }
-    - echo "✅ Backend validé"
+    - echo "✅ Backend validation successful"
   rules:
     - if: '$CI_COMMIT_REF_NAME == "dev" || $CI_COMMIT_REF_NAME == "main"'
     - changes:
@@ -163,23 +168,23 @@ security_scan:
   stage: validate
   image: node:${NODE_VERSION}
   script:
-    - echo "🔒 Scan de sécurité..."
-    # Version SIMPLIFIÉE sans téléchargements
+    - echo "🔒 Running security scan..."
+    # Simplified security scan without downloads
     - |
       if (Test-Path "client/package.json") {
         cd client
-        echo "Scan sécurité frontend..."
-        npm audit --audit-level moderate --production || echo "Vulnérabilités trouvées"
+        echo "Scanning frontend dependencies..."
+        npm audit --audit-level moderate --production || echo "Vulnerabilities found"
         cd ..
       }
     - |
       if (Test-Path "backend/package.json") {
         cd backend
-        echo "Scan sécurité backend..."
-        npm audit --audit-level moderate --production || echo "Vulnérabilités trouvées"
+        echo "Scanning backend dependencies..."
+        npm audit --audit-level moderate --production || echo "Vulnerabilities found"
         cd ..
       }
-    - echo "✅ Scan sécurité terminé"
+    - echo "✅ Security scan completed"
   rules:
     - if: '$CI_COMMIT_REF_NAME == "dev" || $CI_COMMIT_REF_NAME == "main"'
     - changes:
@@ -197,17 +202,20 @@ security_scan:
 frontend_tests:
   stage: test
   <<: *node_template
-  dependencies:
-    - install_frontend_deps
+  # ⚠️ REMOVED DEPENDENCIES - using cache instead
   script:
     - cd client
-    - echo "🧪 Tests frontend..."
+    - echo "🧪 Running frontend tests..."
+    - if (!(Test-Path "node_modules")) {
+        echo "❌ Cache missing - reinstalling dependencies..."
+        npm ci --no-audit --prefer-offline
+      }
     - $testScript = npm run | Select-String "test"
     - if ($testScript) {
         npm test -- --watchAll=false --passWithNoTests
-        echo "✅ Tests frontend terminés"
+        echo "✅ Frontend tests completed"
       } else {
-        echo "ℹ️ Aucun script test - ignoré"
+        echo "ℹ️ No test script found - skipped"
       }
   rules:
     - if: '$CI_COMMIT_REF_NAME == "dev" || $CI_COMMIT_REF_NAME == "main"'
@@ -219,17 +227,20 @@ frontend_tests:
 backend_tests:
   stage: test
   <<: *node_template
-  dependencies:
-    - install_backend_deps
+  # ⚠️ REMOVED DEPENDENCIES - using cache instead
   script:
     - cd backend
-    - echo "🧪 Tests backend..."
+    - echo "🧪 Running backend tests..."
+    - if (!(Test-Path "node_modules")) {
+        echo "❌ Cache missing - reinstalling dependencies..."
+        npm ci --no-audit --prefer-offline
+      }
     - $hasJest = (Test-Path "jest.config.js") -or (Test-Path "jest.config.cjs") -or (Test-Path "jest.config.ts")
     - if ($hasJest) {
         npm run test
-        echo "✅ Tests backend terminés"
+        echo "✅ Backend tests completed"
       } else {
-        echo "ℹ️ Aucune config Jest - ignoré"
+        echo "ℹ️ No Jest config found - skipped"
       }
   rules:
     - if: '$CI_COMMIT_REF_NAME == "dev" || $CI_COMMIT_REF_NAME == "main"'
@@ -250,11 +261,11 @@ database_schema_validation:
     DATABASE_URL: "postgresql://tester:test_password@postgres:5432/test_employeedb"
   script:
     - cd backend
-    - echo "🗄️ Validation schéma DB..."
+    - echo "🗄️ Validating database schema..."
     - npx prisma validate
     - npx prisma migrate reset --force --skip-seed
     - npx prisma migrate deploy
-    - echo "✅ DB validée"
+    - echo "✅ Database validation successful"
   rules:
     - if: '$CI_COMMIT_REF_NAME == "dev" || $CI_COMMIT_REF_NAME == "main"'
     - changes:
@@ -271,9 +282,9 @@ test_database_image:
   variables:
     DOCKER_TLS_CERTDIR: ""
   script:
-    - echo "🗄️ Test image DB rapide..."
+    - echo "🗄️ Testing database image..."
     - docker build -t $DB_IMAGE:test ./db
-    - echo "✅ Image DB testée avec succès"
+    - echo "✅ Database image test successful"
   rules:
     - if: '$CI_COMMIT_REF_NAME == "dev" || $CI_COMMIT_REF_NAME == "main"'
     - changes:
@@ -282,27 +293,27 @@ test_database_image:
     - windows
     - local
 
-# Job supplémentaire pour compléter les 14 jobs
+# Additional job to complete 14 jobs
 code_quality_check:
   stage: test
   image: node:${NODE_VERSION}
   script:
-    - echo "📋 Vérification qualité code..."
+    - echo "📋 Running code quality checks..."
     - |
       if (Test-Path "client/package.json") {
         cd client
         $hasLint = npm run | Select-String "lint"
-        if ($hasLint) { npm run lint || echo "Linting échoué mais continuer" }
+        if ($hasLint) { npm run lint || echo "Linting failed but continuing" }
         cd ..
       }
     - |
       if (Test-Path "backend/package.json") {
         cd backend
         $hasLint = npm run | Select-String "lint"
-        if ($hasLint) { npm run lint || echo "Linting échoué mais continuer" }
+        if ($hasLint) { npm run lint || echo "Linting failed but continuing" }
         cd ..
       }
-    - echo "✅ Qualité code vérifiée"
+    - echo "✅ Code quality checks completed"
   rules:
     - if: '$CI_COMMIT_REF_NAME == "dev" || $CI_COMMIT_REF_NAME == "main"'
     - changes:
@@ -321,7 +332,7 @@ build_frontend:
   <<: *docker_build_template
   stage: build
   script:
-    - echo "🏗️ Construction frontend..."
+    - echo "🏗️ Building frontend image..."
     - docker build -t $FRONTEND_IMAGE:$COMMIT_TAG ./client
     - docker push $FRONTEND_IMAGE:$COMMIT_TAG
   rules:
@@ -333,7 +344,7 @@ build_backend:
   <<: *docker_build_template
   stage: build
   script:
-    - echo "🏗️ Construction backend..."
+    - echo "🏗️ Building backend image..."
     - docker build -t $BACKEND_IMAGE:$COMMIT_TAG ./backend
     - docker push $BACKEND_IMAGE:$COMMIT_TAG
   rules:
@@ -345,7 +356,7 @@ build_database:
   <<: *docker_build_template
   stage: build
   script:
-    - echo "🏗️ Construction DB..."
+    - echo "🏗️ Building database image..."
     - docker build -t $DB_IMAGE:$COMMIT_TAG ./db
     - docker push $DB_IMAGE:$COMMIT_TAG
   rules:
@@ -366,13 +377,13 @@ deploy_staging:
   before_script:
     - apk add --no-cache openssh-client
   script:
-    - echo "🚀 Déploiement staging..."
+    - echo "🚀 Deploying to staging..."
     - |
       ssh -o StrictHostKeyChecking=no $STAGING_DEPLOY_USER@$STAGING_DEPLOY_SERVER "
         cd $STAGING_DEPLOY_PATH &&
         docker-compose pull --quiet &&
         docker-compose up -d --no-build frontend backend &&
-        echo '✅ Staging déployé'"
+        echo '✅ Staging deployment completed'"
   rules:
     - if: '$CI_COMMIT_REF_NAME == "dev"'
   tags:
@@ -388,16 +399,16 @@ deploy_production:
   before_script:
     - apk add --no-cache openssh-client curl
   script:
-    - echo "🚀 Déploiement production..."
+    - echo "🚀 Deploying to production..."
     - |
       ssh -o StrictHostKeyChecking=no $DEPLOY_USER@$DEPLOY_SERVER "
         cd $DEPLOY_PATH &&
         docker-compose pull --quiet &&
         docker-compose up -d --no-build &&
-        echo '✅ Production déployée'"
-    - echo "🔄 Vérification santé..."
+        echo '✅ Production deployment completed'"
+    - echo "🔄 Running health check..."
     - sleep 10
-    - curl -f https://ems-platform.com/api/health || echo "⚠️ Health check échoué"
+    - curl -f https://ems-platform.com/api/health || echo "⚠️ Health check failed"
   rules:
     - if: '$CI_COMMIT_REF_NAME == "main"'
       when: manual
@@ -417,14 +428,18 @@ cleanup_docker:
   variables:
     DOCKER_TLS_CERTDIR: ""
   script:
-    - echo "🧹 Nettoyage Docker..."
+    - echo "🧹 Cleaning up Docker resources..."
     - docker system prune -f
-    - echo "✅ Nettoyage terminé"
+    - echo "✅ Cleanup completed"
   tags:
     - windows
     - local
   when: always
   allow_failure: true
+
+# =============================================
+# Workflow Configuration
+# =============================================
 
 workflow:
   rules:
