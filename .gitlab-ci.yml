@@ -2,12 +2,12 @@
 # Optimisé pour vitesse maximale + cache efficace + cleanup
 
 stages:
-  - dependencies  # Installation des dépendances
-  - validate      # Validation du code
-  - test          # Tests unitaires
-  - build         # Construction Docker
-  - deploy        # Déploiement
-  - cleanup       # Nettoyage final
+  - dependencies
+  - validate
+  - test
+  - build
+  - deploy
+  - cleanup
 
 # =============================================
 # Variables Globales Optimisées
@@ -17,7 +17,6 @@ variables:
   DOCKER_TLS_CERTDIR: ""
   NODE_VERSION: "20"
   NPM_CONFIG_CACHE: "/tmp/npm_cache"
-  CYPRESS_CACHE_FOLDER: "/tmp/cypress_cache"
 
   # Docker Images
   FRONTEND_IMAGE: "amineelalami/ems-platform-frontend"
@@ -28,7 +27,7 @@ variables:
   COMMIT_TAG: "sha-${CI_COMMIT_SHORT_SHA}"
 
 # =============================================
-# Cache Configuration - OPTIMISÉ WINDOWS
+# Cache Configuration - SYNTAXE CORRIGÉE
 # =============================================
 
 cache:
@@ -37,9 +36,7 @@ cache:
     - client/node_modules/
     - backend/node_modules/
     - /tmp/npm_cache/
-    - /tmp/cypress_cache/
   policy: pull-push
-  when: on_success
 
 # =============================================
 # Templates Optimisés
@@ -73,7 +70,7 @@ cache:
     - local
 
 # =============================================
-# DEPENDENCIES STAGE - OPTIMISÉ
+# DEPENDENCIES STAGE - SYNTAXE CORRIGÉE
 # =============================================
 
 install_frontend_deps:
@@ -83,7 +80,6 @@ install_frontend_deps:
     - cd client
     - echo "📦 Installation ULTRA RAPIDE des dépendances frontend..."
     - |
-      # Nettoyage agressif pour éviter EPERM
       if (Test-Path "node_modules") {
         Remove-Item -Recurse -Force node_modules -ErrorAction SilentlyContinue
       }
@@ -94,7 +90,7 @@ install_frontend_deps:
       }
     - echo "✅ Dépendances frontend installées"
   cache:
-    key: "frontend-${CI_COMMIT_REF_SLUG}-${client/package-lock.json}"
+    key: "frontend-${CI_COMMIT_REF_SLUG}"
     paths:
       - client/node_modules/
     policy: pull-push
@@ -123,7 +119,7 @@ install_backend_deps:
     - npx prisma generate
     - echo "✅ Dépendances backend installées"
   cache:
-    key: "backend-${CI_COMMIT_REF_SLUG}-${backend/package-lock.json}"
+    key: "backend-${CI_COMMIT_REF_SLUG}"
     paths:
       - backend/node_modules/
     policy: pull-push
@@ -252,7 +248,6 @@ build_frontend:
     - if: '$CI_COMMIT_REF_NAME == "dev" || $CI_COMMIT_REF_NAME == "main"'
     - changes:
         - client/**/*
-        - .gitlab-ci.yml
   dependencies: []
 
 build_backend:
@@ -273,7 +268,6 @@ build_backend:
     - if: '$CI_COMMIT_REF_NAME == "dev" || $CI_COMMIT_REF_NAME == "main"'
     - changes:
         - backend/**/*
-        - .gitlab-ci.yml
   dependencies: []
 
 build_database:
@@ -292,7 +286,6 @@ build_database:
     - if: '$CI_COMMIT_REF_NAME == "dev" || $CI_COMMIT_REF_NAME == "main"'
     - changes:
         - db/**/*
-        - .gitlab-ci.yml
   dependencies: []
 
 # =============================================
@@ -361,11 +354,9 @@ cleanup_docker:
   script:
     - echo "🧹 NETTOYAGE INTELLIGENT EN COURS..."
     - |
-      # Nettoyage sélectif pour libérer de l'espace
       echo "📊 Avant nettoyage:"
       docker system df
 
-      # Nettoyer seulement les ressources anciennes
       docker container prune -f
       docker image prune -f --filter "until=24h"
       docker network prune -f
