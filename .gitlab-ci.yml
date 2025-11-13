@@ -217,7 +217,7 @@ security_audit:
     - changes:
         - client/package-lock.json
         - backend/package-lock.json
-    - schedules  # Run on scheduled pipelines
+    - if: $CI_PIPELINE_SOURCE == "schedule"  # Run on scheduled pipelines
 
 # =============================================
 # TEST STAGE - Parallel execution
