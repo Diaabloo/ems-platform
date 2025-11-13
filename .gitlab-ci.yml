@@ -1,4 +1,4 @@
-# .gitlab-ci.yml - OPTIMIZED VERSION
+# .gitlab-ci.yml - OPTIMIZED VERSION FOR WINDOWS POWERSHELL
 
 # =============================================
 # CI/CD Pipeline for Employee Management System
@@ -33,7 +33,6 @@ variables:
 
   # Cache configuration
   NPM_CACHE_KEY: "${CI_COMMIT_REF_SLUG}-npm-${CI_COMMIT_SHORT_SHA}"
-  DOCKER_CACHE_KEY: "${CI_COMMIT_REF_SLUG}-docker-${CI_COMMIT_SHORT_SHA}"
 
 # =============================================
 # Cache Configuration - OPTIMIZED
@@ -58,7 +57,7 @@ cache:
     - docker:24-dind
   variables:
     DOCKER_TLS_CERTDIR: ""
-    DOCKER_BUILDKIT: "1"  # Enable buildkit for faster builds
+    DOCKER_BUILDKIT: "1"
   before_script:
     - docker info
     - |
@@ -72,13 +71,13 @@ cache:
     - local
 
 .node_template: &node_template
-  image: node:${NODE_VERSION}-alpine  # Lighter image
+  image: node:${NODE_VERSION}
   tags:
     - windows
     - local
 
 # =============================================
-# DEPENDENCIES STAGE - Parallel installation
+# DEPENDENCIES STAGE - PowerShell compatible
 # =============================================
 
 install_frontend_deps:
@@ -87,15 +86,26 @@ install_frontend_deps:
   script:
     - cd client
     - |
-      # Only run npm ci if package-lock changed, otherwise use cache
-      if [ -f "package-lock.json" ] && [ "$(find package-lock.json -newer ../.npm/.lock-file 2>/dev/null)" ]; then
-        echo "📦 package-lock.json changed, running npm ci..."
-        npm ci --prefer-offline --cache .npm --audit false
-      else
-        echo "📦 Using cached node_modules, checking integrity..."
-        npm ci --prefer-offline --cache .npm --audit false || npm install --prefer-offline --cache .npm
-      fi
-    - mkdir -p ../.npm && touch ../.npm/.lock-file
+      # PowerShell compatible dependency check
+      if (Test-Path "package-lock.json") {
+        $packageLock = Get-Item "package-lock.json"
+        $lockFile = Get-Item "../.npm/.lock-file" -ErrorAction SilentlyContinue
+        if (-not $lockFile -or $packageLock.LastWriteTime -gt $lockFile.LastWriteTime) {
+          echo "📦 package-lock.json changed, running npm ci..."
+          npm ci --prefer-offline --cache .npm --audit false
+        } else {
+          echo "📦 Using cached node_modules, checking integrity..."
+          npm ci --prefer-offline --cache .npm --audit false
+          if ($LASTEXITCODE -ne 0) {
+            npm install --prefer-offline --cache .npm
+          }
+        }
+      } else {
+        echo "📦 No package-lock.json, running npm install..."
+        npm install --prefer-offline --cache .npm
+      }
+    - New-Item -ItemType Directory -Force -Path "../.npm"
+    - Set-Content -Path "../.npm/.lock-file" -Value "lock"
   cache:
     key: "${NPM_CACHE_KEY}-frontend"
     paths:
@@ -118,15 +128,27 @@ install_backend_deps:
   script:
     - cd backend
     - |
-      if [ -f "package-lock.json" ] && [ "$(find package-lock.json -newer ../.npm/.lock-file 2>/dev/null)" ]; then
-        echo "📦 package-lock.json changed, running npm ci..."
-        npm ci --prefer-offline --cache .npm --audit false
-      else
-        echo "📦 Using cached node_modules, checking integrity..."
-        npm ci --prefer-offline --cache .npm --audit false || npm install --prefer-offline --cache .npm
-      fi
+      # PowerShell compatible dependency check
+      if (Test-Path "package-lock.json") {
+        $packageLock = Get-Item "package-lock.json"
+        $lockFile = Get-Item "../.npm/.lock-file" -ErrorAction SilentlyContinue
+        if (-not $lockFile -or $packageLock.LastWriteTime -gt $lockFile.LastWriteTime) {
+          echo "📦 package-lock.json changed, running npm ci..."
+          npm ci --prefer-offline --cache .npm --audit false
+        } else {
+          echo "📦 Using cached node_modules, checking integrity..."
+          npm ci --prefer-offline --cache .npm --audit false
+          if ($LASTEXITCODE -ne 0) {
+            npm install --prefer-offline --cache .npm
+          }
+        }
+      } else {
+        echo "📦 No package-lock.json, running npm install..."
+        npm install --prefer-offline --cache .npm
+      }
     - npx prisma generate
-    - mkdir -p ../.npm && touch ../.npm/.lock-file
+    - New-Item -ItemType Directory -Force -Path "../.npm"
+    - Set-Content -Path "../.npm/.lock-file" -Value "lock"
   cache:
     key: "${NPM_CACHE_KEY}-backend"
     paths:
@@ -145,7 +167,7 @@ install_backend_deps:
         - backend/prisma/schema.prisma
 
 # =============================================
-# VALIDATION STAGE - Parallel execution
+# VALIDATION STAGE - PowerShell compatible
 # =============================================
 
 validate_frontend:
@@ -167,7 +189,6 @@ validate_frontend:
     - changes:
         - client/**/*
         - .gitlab-ci.yml
-  parallel: 2
 
 validate_backend:
   stage: validate
@@ -178,14 +199,18 @@ validate_backend:
     - cd backend
     - echo "🔍 Validating backend..."
     - |
-      if npm run | grep -q "build"; then
+      # PowerShell compatible script checking
+      $scripts = npm run
+      if ($scripts -like "*build*") {
         npm run build
         echo "✅ Backend build successful"
-      fi
+      }
     - |
-      if npm run | grep -q "lint"; then
-        npm run lint || echo "⚠️  Linting issues found"
-      fi
+      $scripts = npm run
+      if ($scripts -like "*lint*") {
+        npm run lint
+        echo "✅ Backend linting completed"
+      }
   artifacts:
     paths:
       - backend/dist/
@@ -202,25 +227,33 @@ security_audit:
   script:
     - echo "🔒 Running security audit..."
     - |
-      # Only run audit on dependency changes or weekly
-      if [ -f "client/package-lock.json" ] && [ "$(find client/package-lock.json -mtime -7)" ]; then
-        cd client && npm audit --audit-level high --production || true
-        cd ..
-      fi
+      # PowerShell compatible security check
+      if (Test-Path "client/package-lock.json") {
+        $clientLock = Get-Item "client/package-lock.json"
+        if ((Get-Date) - $clientLock.LastWriteTime -le (New-TimeSpan -Days 7)) {
+          cd client
+          npm audit --audit-level high --production
+          cd ..
+        }
+      }
     - |
-      if [ -f "backend/package-lock.json" ] && [ "$(find backend/package-lock.json -mtime -7)" ]; then
-        cd backend && npm audit --audit-level high --production || true
-        cd ..
-      fi
+      if (Test-Path "backend/package-lock.json") {
+        $backendLock = Get-Item "backend/package-lock.json"
+        if ((Get-Date) - $backendLock.LastWriteTime -le (New-TimeSpan -Days 7)) {
+          cd backend
+          npm audit --audit-level high --production
+          cd ..
+        }
+      }
   rules:
     - if: '$CI_COMMIT_REF_NAME == "main"'
     - changes:
         - client/package-lock.json
         - backend/package-lock.json
-    - if: $CI_PIPELINE_SOURCE == "schedule"  # Run on scheduled pipelines
+    - if: $CI_PIPELINE_SOURCE == "schedule"
 
 # =============================================
-# TEST STAGE - Parallel execution
+# TEST STAGE - PowerShell compatible
 # =============================================
 
 frontend_tests:
@@ -232,19 +265,22 @@ frontend_tests:
     - cd client
     - echo "🧪 Running frontend tests..."
     - |
-      if npm run | grep -q "test" && ! npm run test -- --dry-run 2>&1 | grep -q "Error: no test specified"; then
-        npm test -- --coverage --watchAll=false --passWithNoTests
-        echo "✅ Frontend tests completed"
-      else
-        echo "⚠️  No tests configured, skipping"
-      fi
+      $scripts = npm run
+      if ($scripts -like "*test*") {
+        $testOutput = npm run test -- --dry-run 2>&1
+        if ($testOutput -notlike "*Error: no test specified*") {
+          npm test -- --coverage --watchAll=false --passWithNoTests
+          echo "✅ Frontend tests completed"
+        } else {
+          echo "⚠️  Test script exists but has 'no test specified' error"
+        }
+      } else {
+        echo "⚠️  No test script found, skipping tests"
+      }
   artifacts:
-    reports:
-      junit: client/junit.xml
     paths:
       - client/coverage/
     expire_in: 1 week
-  coverage: '/All files[^|]*\|[^|]*\s+([\d\.]+)/'
   rules:
     - if: '$CI_COMMIT_REF_NAME == "dev" || $CI_COMMIT_REF_NAME == "main"'
     - changes:
@@ -261,15 +297,13 @@ backend_tests:
     - cd backend
     - echo "🧪 Running backend tests..."
     - |
-      if [ -f "jest.config.js" ] || [ -f "jest.config.cjs" ]; then
-        npm run test:ci || echo "⚠️  Tests failed but continuing pipeline"
+      if (Test-Path "jest.config.js" -or Test-Path "jest.config.cjs") {
+        npm run test:ci
         echo "✅ Backend tests completed"
-      else
+      } else {
         echo "⚠️  No Jest config found, skipping tests"
-      fi
+      }
   artifacts:
-    reports:
-      junit: backend/junit.xml
     paths:
       - backend/coverage/
     expire_in: 1 week
@@ -282,9 +316,9 @@ backend_tests:
 
 database_tests:
   stage: test
-  image: node:${NODE_VERSION}-alpine
+  image: node:${NODE_VERSION}
   services:
-    - postgres:${POSTGRES_VERSION}-alpine  # Lighter image
+    - postgres:${POSTGRES_VERSION}
   variables:
     POSTGRES_DB: test_employeedb
     POSTGRES_USER: tester
@@ -309,22 +343,20 @@ database_tests:
     - local
 
 # =============================================
-# BUILD STAGE - Parallel builds with cache
+# BUILD STAGE - Docker builds (keep as is)
 # =============================================
 
 build_frontend:
   <<: *docker_build_template
   stage: build
   script:
-    - echo "🏗️ Building frontend image with cache..."
+    - echo "🏗️ Building frontend image..."
     - |
       docker build \
-        --cache-from $FRONTEND_IMAGE:latest \
         --build-arg BUILD_VERSION=${CI_COMMIT_SHORT_SHA} \
         --build-arg BUILD_DATE=$(date -u +'%Y-%m-%dT%H:%M:%SZ') \
         -t $FRONTEND_IMAGE:$COMMIT_TAG \
         -t $FRONTEND_IMAGE:latest \
-        --target=production \
         ./client
     - echo "📌 Pushing frontend image..."
     - docker push $FRONTEND_IMAGE:$COMMIT_TAG
@@ -345,15 +377,13 @@ build_backend:
   <<: *docker_build_template
   stage: build
   script:
-    - echo "🏗️ Building backend image with cache..."
+    - echo "🏗️ Building backend image..."
     - |
       docker build \
-        --cache-from $BACKEND_IMAGE:latest \
         --build-arg BUILD_VERSION=${CI_COMMIT_SHORT_SHA} \
         --build-arg BUILD_DATE=$(date -u +'%Y-%m-%dT%H:%M:%SZ') \
         -t $BACKEND_IMAGE:$COMMIT_TAG \
         -t $BACKEND_IMAGE:latest \
-        --target=production \
         ./backend
     - echo "📌 Pushing backend image..."
     - docker push $BACKEND_IMAGE:$COMMIT_TAG
@@ -375,7 +405,13 @@ build_database:
   stage: build
   script:
     - echo "🏗️ Building database image..."
-    - test -f "db/employeedb_dump_pg15.sql" && echo "✅ SQL file exists" || exit 1
+    - |
+      if (Test-Path "db/employeedb_dump_pg15.sql") {
+        echo "✅ SQL file exists"
+      } else {
+        echo "❌ SQL file missing"
+        exit 1
+      }
     - |
       docker build \
         --build-arg BUILD_VERSION=${CI_COMMIT_SHORT_SHA} \
@@ -460,7 +496,7 @@ cleanup:
   script:
     - echo "🧹 Cleaning up..."
     - echo "$DOCKERHUB_TOKEN" | docker login -u "$DOCKERHUB_USERNAME" --password-stdin
-    - docker system prune -f --filter "until=48h"  # Keep images for 2 days
+    - docker system prune -f --filter "until=48h"
   when: on_success
   rules:
     - if: '$CI_COMMIT_REF_NAME == "dev" || $CI_COMMIT_REF_NAME == "main"'
