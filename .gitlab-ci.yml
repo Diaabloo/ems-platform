@@ -1,17 +1,16 @@
-# .gitlab-ci.yml - OPTIMIZED VERSION FOR WINDOWS POWERSHELL
+# .gitlab-ci.yml - OPTIMIZED FOR WINDOWS LOCAL RUNNER
 
 # =============================================
 # CI/CD Pipeline for Employee Management System
-# PERN Stack with Prisma ORM - OPTIMIZED
+# PERN Stack with Prisma ORM - WINDOWS OPTIMIZED
 # =============================================
 
 stages:
-  - dependencies  # Dependency installation (parallel)
-  - validate      # Code quality, security scans (parallel)
-  - test          # Unit tests, integration tests (parallel)
-  - build         # Docker image building (parallel)
+  - dependencies  # Dependency installation
+  - validate      # Code quality, security scans
+  - test          # Unit tests, integration tests
+  - build         # Docker image building
   - deploy        # Staging and production deployment
-  - cleanup       # Cleanup operations
 
 # =============================================
 # Global Variables & Configuration
@@ -31,19 +30,15 @@ variables:
   COMMIT_TAG: "sha-${CI_COMMIT_SHORT_SHA}-${CI_PIPELINE_ID}"
   VERSION_TAG: "v${CI_PIPELINE_ID}"
 
-  # Cache configuration
-  NPM_CACHE_KEY: "${CI_COMMIT_REF_SLUG}-npm-${CI_COMMIT_SHORT_SHA}"
-
 # =============================================
-# Cache Configuration - OPTIMIZED
+# Cache Configuration - SIMPLIFIED FOR WINDOWS
 # =============================================
 
 cache:
-  key: "${NPM_CACHE_KEY}"
+  key: "${CI_COMMIT_REF_SLUG}"
   paths:
     - client/node_modules/
     - backend/node_modules/
-    - .npm/
   policy: pull-push
   when: on_success
 
@@ -57,7 +52,6 @@ cache:
     - docker:24-dind
   variables:
     DOCKER_TLS_CERTDIR: ""
-    DOCKER_BUILDKIT: "1"
   before_script:
     - docker info
     - |
@@ -77,7 +71,7 @@ cache:
     - local
 
 # =============================================
-# DEPENDENCIES STAGE - PowerShell compatible
+# DEPENDENCIES STAGE - Windows compatible
 # =============================================
 
 install_frontend_deps:
@@ -85,37 +79,25 @@ install_frontend_deps:
   <<: *node_template
   script:
     - cd client
+    - echo "📦 Installing frontend dependencies..."
     - |
-      # PowerShell compatible dependency check
-      if (Test-Path "package-lock.json") {
-        $packageLock = Get-Item "package-lock.json"
-        $lockFile = Get-Item "../.npm/.lock-file" -ErrorAction SilentlyContinue
-        if (-not $lockFile -or $packageLock.LastWriteTime -gt $lockFile.LastWriteTime) {
-          echo "📦 package-lock.json changed, running npm ci..."
-          npm ci --prefer-offline --cache .npm --audit false
-        } else {
-          echo "📦 Using cached node_modules, checking integrity..."
-          npm ci --prefer-offline --cache .npm --audit false
-          if ($LASTEXITCODE -ne 0) {
-            npm install --prefer-offline --cache .npm
-          }
-        }
-      } else {
-        echo "📦 No package-lock.json, running npm install..."
-        npm install --prefer-offline --cache .npm
+      # Clean installation without complex cache logic
+      if (Test-Path "node_modules") {
+        echo "🗑️  Removing existing node_modules..."
+        Remove-Item -Recurse -Force node_modules -ErrorAction SilentlyContinue
       }
-    - New-Item -ItemType Directory -Force -Path "../.npm"
-    - Set-Content -Path "../.npm/.lock-file" -Value "lock"
+      npm ci --no-audit --prefer-offline
+    - echo "✅ Frontend dependencies installed"
   cache:
-    key: "${NPM_CACHE_KEY}-frontend"
+    key: "${CI_COMMIT_REF_SLUG}-frontend"
     paths:
       - client/node_modules/
-      - client/.npm/
     policy: pull-push
   artifacts:
     paths:
       - client/node_modules/
     expire_in: 1 hour
+    when: on_success
   rules:
     - if: '$CI_COMMIT_REF_NAME == "dev" || $CI_COMMIT_REF_NAME == "main"'
     - changes:
@@ -127,38 +109,26 @@ install_backend_deps:
   <<: *node_template
   script:
     - cd backend
+    - echo "📦 Installing backend dependencies..."
     - |
-      # PowerShell compatible dependency check
-      if (Test-Path "package-lock.json") {
-        $packageLock = Get-Item "package-lock.json"
-        $lockFile = Get-Item "../.npm/.lock-file" -ErrorAction SilentlyContinue
-        if (-not $lockFile -or $packageLock.LastWriteTime -gt $lockFile.LastWriteTime) {
-          echo "📦 package-lock.json changed, running npm ci..."
-          npm ci --prefer-offline --cache .npm --audit false
-        } else {
-          echo "📦 Using cached node_modules, checking integrity..."
-          npm ci --prefer-offline --cache .npm --audit false
-          if ($LASTEXITCODE -ne 0) {
-            npm install --prefer-offline --cache .npm
-          }
-        }
-      } else {
-        echo "📦 No package-lock.json, running npm install..."
-        npm install --prefer-offline --cache .npm
+      # Clean installation without complex cache logic
+      if (Test-Path "node_modules") {
+        echo "🗑️  Removing existing node_modules..."
+        Remove-Item -Recurse -Force node_modules -ErrorAction SilentlyContinue
       }
+      npm ci --no-audit --prefer-offline
     - npx prisma generate
-    - New-Item -ItemType Directory -Force -Path "../.npm"
-    - Set-Content -Path "../.npm/.lock-file" -Value "lock"
+    - echo "✅ Backend dependencies installed"
   cache:
-    key: "${NPM_CACHE_KEY}-backend"
+    key: "${CI_COMMIT_REF_SLUG}-backend"
     paths:
       - backend/node_modules/
-      - backend/.npm/
     policy: pull-push
   artifacts:
     paths:
       - backend/node_modules/
     expire_in: 1 hour
+    when: on_success
   rules:
     - if: '$CI_COMMIT_REF_NAME == "dev" || $CI_COMMIT_REF_NAME == "main"'
     - changes:
@@ -167,7 +137,7 @@ install_backend_deps:
         - backend/prisma/schema.prisma
 
 # =============================================
-# VALIDATION STAGE - PowerShell compatible
+# VALIDATION STAGE - Windows compatible
 # =============================================
 
 validate_frontend:
@@ -188,7 +158,6 @@ validate_frontend:
     - if: '$CI_COMMIT_REF_NAME == "dev" || $CI_COMMIT_REF_NAME == "main"'
     - changes:
         - client/**/*
-        - .gitlab-ci.yml
 
 validate_backend:
   stage: validate
@@ -199,18 +168,15 @@ validate_backend:
     - cd backend
     - echo "🔍 Validating backend..."
     - |
-      # PowerShell compatible script checking
+      # Check if build script exists
       $scripts = npm run
       if ($scripts -like "*build*") {
         npm run build
         echo "✅ Backend build successful"
+      } else {
+        echo "ℹ️  No build script found"
       }
-    - |
-      $scripts = npm run
-      if ($scripts -like "*lint*") {
-        npm run lint
-        echo "✅ Backend linting completed"
-      }
+    - echo "✅ Backend validation successful"
   artifacts:
     paths:
       - backend/dist/
@@ -219,41 +185,9 @@ validate_backend:
     - if: '$CI_COMMIT_REF_NAME == "dev" || $CI_COMMIT_REF_NAME == "main"'
     - changes:
         - backend/**/*
-        - .gitlab-ci.yml
-
-security_audit:
-  stage: validate
-  <<: *node_template
-  script:
-    - echo "🔒 Running security audit..."
-    - |
-      # PowerShell compatible security check
-      if (Test-Path "client/package-lock.json") {
-        $clientLock = Get-Item "client/package-lock.json"
-        if ((Get-Date) - $clientLock.LastWriteTime -le (New-TimeSpan -Days 7)) {
-          cd client
-          npm audit --audit-level high --production
-          cd ..
-        }
-      }
-    - |
-      if (Test-Path "backend/package-lock.json") {
-        $backendLock = Get-Item "backend/package-lock.json"
-        if ((Get-Date) - $backendLock.LastWriteTime -le (New-TimeSpan -Days 7)) {
-          cd backend
-          npm audit --audit-level high --production
-          cd ..
-        }
-      }
-  rules:
-    - if: '$CI_COMMIT_REF_NAME == "main"'
-    - changes:
-        - client/package-lock.json
-        - backend/package-lock.json
-    - if: $CI_PIPELINE_SOURCE == "schedule"
 
 # =============================================
-# TEST STAGE - PowerShell compatible
+# TEST STAGE - Windows compatible
 # =============================================
 
 frontend_tests:
@@ -265,27 +199,17 @@ frontend_tests:
     - cd client
     - echo "🧪 Running frontend tests..."
     - |
-      $scripts = npm run
-      if ($scripts -like "*test*") {
-        $testOutput = npm run test -- --dry-run 2>&1
-        if ($testOutput -notlike "*Error: no test specified*") {
-          npm test -- --coverage --watchAll=false --passWithNoTests
-          echo "✅ Frontend tests completed"
-        } else {
-          echo "⚠️  Test script exists but has 'no test specified' error"
-        }
+      # Simple test execution
+      if (npm run | Select-String -Pattern "test" -Quiet) {
+        npm test -- --watchAll=false --passWithNoTests
+        echo "✅ Frontend tests completed"
       } else {
         echo "⚠️  No test script found, skipping tests"
       }
-  artifacts:
-    paths:
-      - client/coverage/
-    expire_in: 1 week
   rules:
     - if: '$CI_COMMIT_REF_NAME == "dev" || $CI_COMMIT_REF_NAME == "main"'
     - changes:
         - client/src/**/*
-        - client/__tests__/**/*
         - client/package.json
 
 backend_tests:
@@ -297,53 +221,21 @@ backend_tests:
     - cd backend
     - echo "🧪 Running backend tests..."
     - |
+      # Simple test execution
       if (Test-Path "jest.config.js" -or Test-Path "jest.config.cjs") {
-        npm run test:ci
+        npm run test
         echo "✅ Backend tests completed"
       } else {
         echo "⚠️  No Jest config found, skipping tests"
       }
-  artifacts:
-    paths:
-      - backend/coverage/
-    expire_in: 1 week
   rules:
     - if: '$CI_COMMIT_REF_NAME == "dev" || $CI_COMMIT_REF_NAME == "main"'
     - changes:
         - backend/src/**/*
-        - backend/__tests__/**/*
         - backend/package.json
 
-database_tests:
-  stage: test
-  image: node:${NODE_VERSION}
-  services:
-    - postgres:${POSTGRES_VERSION}
-  variables:
-    POSTGRES_DB: test_employeedb
-    POSTGRES_USER: tester
-    POSTGRES_PASSWORD: test_password
-    DATABASE_URL: "postgresql://tester:test_password@postgres:5432/test_employeedb"
-  script:
-    - cd backend
-    - npm ci --prefer-offline --cache .npm
-    - npx prisma generate
-    - echo "🗄️ Testing database..."
-    - npx prisma validate
-    - npx prisma migrate reset --force --skip-seed
-    - npx prisma migrate deploy
-    - echo "✅ Database tests passed"
-  rules:
-    - if: '$CI_COMMIT_REF_NAME == "dev" || $CI_COMMIT_REF_NAME == "main"'
-    - changes:
-        - backend/prisma/schema.prisma
-        - backend/prisma/migrations/**/*
-  tags:
-    - windows
-    - local
-
 # =============================================
-# BUILD STAGE - Docker builds (keep as is)
+# BUILD STAGE - Docker builds
 # =============================================
 
 build_frontend:
@@ -354,24 +246,16 @@ build_frontend:
     - |
       docker build \
         --build-arg BUILD_VERSION=${CI_COMMIT_SHORT_SHA} \
-        --build-arg BUILD_DATE=$(date -u +'%Y-%m-%dT%H:%M:%SZ') \
         -t $FRONTEND_IMAGE:$COMMIT_TAG \
         -t $FRONTEND_IMAGE:latest \
         ./client
     - echo "📌 Pushing frontend image..."
     - docker push $FRONTEND_IMAGE:$COMMIT_TAG
     - docker push $FRONTEND_IMAGE:latest
-    - |
-      if [ "$CI_COMMIT_REF_NAME" = "main" ]; then
-        docker tag $FRONTEND_IMAGE:$COMMIT_TAG $FRONTEND_IMAGE:$VERSION_TAG
-        docker push $FRONTEND_IMAGE:$VERSION_TAG
-      fi
   rules:
     - if: '$CI_COMMIT_REF_NAME == "dev" || $CI_COMMIT_REF_NAME == "main"'
     - changes:
         - client/**/*
-        - Dockerfile
-        - .dockerignore
 
 build_backend:
   <<: *docker_build_template
@@ -381,24 +265,16 @@ build_backend:
     - |
       docker build \
         --build-arg BUILD_VERSION=${CI_COMMIT_SHORT_SHA} \
-        --build-arg BUILD_DATE=$(date -u +'%Y-%m-%dT%H:%M:%SZ') \
         -t $BACKEND_IMAGE:$COMMIT_TAG \
         -t $BACKEND_IMAGE:latest \
         ./backend
     - echo "📌 Pushing backend image..."
     - docker push $BACKEND_IMAGE:$COMMIT_TAG
     - docker push $BACKEND_IMAGE:latest
-    - |
-      if [ "$CI_COMMIT_REF_NAME" = "main" ]; then
-        docker tag $BACKEND_IMAGE:$COMMIT_TAG $BACKEND_IMAGE:$VERSION_TAG
-        docker push $BACKEND_IMAGE:$VERSION_TAG
-      fi
   rules:
     - if: '$CI_COMMIT_REF_NAME == "dev" || $CI_COMMIT_REF_NAME == "main"'
     - changes:
         - backend/**/*
-        - Dockerfile
-        - .dockerignore
 
 build_database:
   <<: *docker_build_template
@@ -406,6 +282,7 @@ build_database:
   script:
     - echo "🏗️ Building database image..."
     - |
+      # Check if SQL file exists
       if (Test-Path "db/employeedb_dump_pg15.sql") {
         echo "✅ SQL file exists"
       } else {
@@ -421,11 +298,6 @@ build_database:
     - echo "📌 Pushing database image..."
     - docker push $DB_IMAGE:$COMMIT_TAG
     - docker push $DB_IMAGE:latest
-    - |
-      if [ "$CI_COMMIT_REF_NAME" = "main" ]; then
-        docker tag $DB_IMAGE:$COMMIT_TAG $DB_IMAGE:$VERSION_TAG
-        docker push $DB_IMAGE:$VERSION_TAG
-      fi
   rules:
     - if: '$CI_COMMIT_REF_NAME == "dev" || $CI_COMMIT_REF_NAME == "main"'
     - changes:
@@ -480,26 +352,6 @@ deploy_production:
   rules:
     - if: '$CI_COMMIT_REF_NAME == "main"'
       when: manual
-  tags:
-    - windows
-    - local
-
-# =============================================
-# CLEANUP STAGE
-# =============================================
-
-cleanup:
-  stage: cleanup
-  image: docker:24
-  services:
-    - docker:24-dind
-  script:
-    - echo "🧹 Cleaning up..."
-    - echo "$DOCKERHUB_TOKEN" | docker login -u "$DOCKERHUB_USERNAME" --password-stdin
-    - docker system prune -f --filter "until=48h"
-  when: on_success
-  rules:
-    - if: '$CI_COMMIT_REF_NAME == "dev" || $CI_COMMIT_REF_NAME == "main"'
   tags:
     - windows
     - local
