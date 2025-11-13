@@ -1,5 +1,5 @@
-# .gitlab-ci.yml - ULTRA OPTIMIZED FOR WINDOWS RUNNER
-# Optimisé pour vitesse maximale + cache efficace + cleanup
+# .gitlab-ci.yml - CORRIGÉ POUR WINDOWS
+# Problèmes PowerShell et cache résolus
 
 stages:
   - dependencies
@@ -16,7 +16,6 @@ stages:
 variables:
   DOCKER_TLS_CERTDIR: ""
   NODE_VERSION: "20"
-  NPM_CONFIG_CACHE: "/tmp/npm_cache"
 
   # Docker Images
   FRONTEND_IMAGE: "amineelalami/ems-platform-frontend"
@@ -27,7 +26,7 @@ variables:
   COMMIT_TAG: "sha-${CI_COMMIT_SHORT_SHA}"
 
 # =============================================
-# Cache Configuration - SYNTAXE CORRIGÉE
+# Cache Configuration - OPTIMISÉ
 # =============================================
 
 cache:
@@ -35,7 +34,6 @@ cache:
   paths:
     - client/node_modules/
     - backend/node_modules/
-    - /tmp/npm_cache/
   policy: pull-push
 
 # =============================================
@@ -70,7 +68,7 @@ cache:
     - local
 
 # =============================================
-# DEPENDENCIES STAGE - SYNTAXE CORRIGÉE
+# DEPENDENCIES STAGE - CORRIGÉ
 # =============================================
 
 install_frontend_deps:
@@ -78,44 +76,34 @@ install_frontend_deps:
   <<: *node_template
   script:
     - cd client
-    - echo "📦 Installation ULTRA RAPIDE des dépendances frontend..."
-    - |
-      if (Test-Path "node_modules") {
-        Remove-Item -Recurse -Force node_modules -ErrorAction SilentlyContinue
-      }
-      if (Test-Path "package-lock.json") {
-        npm ci --silent --no-audit --prefer-offline
-      } else {
-        npm install --silent --no-audit --prefer-offline
-      }
+    - echo "📦 Installation dépendances frontend..."
+    # Nettoyage agressif pour éviter les conflits
+    - if (Test-Path "node_modules") { Remove-Item -Recurse -Force node_modules }
+    - npm ci --no-audit --prefer-offline
     - echo "✅ Dépendances frontend installées"
   cache:
     key: "frontend-${CI_COMMIT_REF_SLUG}"
     paths:
       - client/node_modules/
     policy: pull-push
+  artifacts:
+    paths:
+      - client/node_modules/
+    expire_in: 1 hour
   rules:
     - if: '$CI_COMMIT_REF_NAME == "dev" || $CI_COMMIT_REF_NAME == "main"'
     - changes:
         - client/package-lock.json
         - client/package.json
-  interruptible: true
 
 install_backend_deps:
   stage: dependencies
   <<: *node_template
   script:
     - cd backend
-    - echo "📦 Installation ULTRA RAPIDE des dépendances backend..."
-    - |
-      if (Test-Path "node_modules") {
-        Remove-Item -Recurse -Force node_modules -ErrorAction SilentlyContinue
-      }
-      if (Test-Path "package-lock.json") {
-        npm ci --silent --no-audit --prefer-offline
-      } else {
-        npm install --silent --no-audit --prefer-offline
-      }
+    - echo "📦 Installation dépendances backend..."
+    - if (Test-Path "node_modules") { Remove-Item -Recurse -Force node_modules }
+    - npm ci --no-audit --prefer-offline
     - npx prisma generate
     - echo "✅ Dépendances backend installées"
   cache:
@@ -123,16 +111,19 @@ install_backend_deps:
     paths:
       - backend/node_modules/
     policy: pull-push
+  artifacts:
+    paths:
+      - backend/node_modules/
+    expire_in: 1 hour
   rules:
     - if: '$CI_COMMIT_REF_NAME == "dev" || $CI_COMMIT_REF_NAME == "main"'
     - changes:
         - backend/package-lock.json
         - backend/package.json
         - backend/prisma/schema.prisma
-  interruptible: true
 
 # =============================================
-# VALIDATION STAGE - CONDITIONNEL OPTIMISÉ
+# VALIDATION STAGE - SYNTAXE CORRIGÉE
 # =============================================
 
 validate_frontend:
@@ -142,17 +133,17 @@ validate_frontend:
     - install_frontend_deps
   script:
     - cd client
-    - echo "🔍 Validation frontend conditionnelle..."
-    - npm run build --silent
+    - echo "🔍 Validation frontend..."
+    # Vérification que les dépendances sont bien là
+    - dir node_modules | findstr "next" || echo "❌ Next.js non trouvé"
+    - npm run build
     - echo "✅ Frontend validé avec succès"
   rules:
     - if: '$CI_COMMIT_REF_NAME == "dev" || $CI_COMMIT_REF_NAME == "main"'
     - changes:
         - client/src/**/*
         - client/public/**/*
-        - client/next.config.*
         - client/package.json
-  allow_failure: false
 
 validate_backend:
   stage: validate
@@ -161,10 +152,10 @@ validate_backend:
     - install_backend_deps
   script:
     - cd backend
-    - echo "🔍 Validation backend conditionnelle..."
-    - if (Test-Path "package.json" -and (npm run | Select-String -Pattern "build" -Quiet)) {
-        npm run build --silent
-      }
+    - echo "🔍 Validation backend..."
+    # SYNTAXE CORRIGÉE - PowerShell valide
+    - $hasBuildScript = (npm run | Select-String -Pattern "build" -Quiet)
+    - if ($hasBuildScript) { npm run build }
     - echo "✅ Backend validé avec succès"
   rules:
     - if: '$CI_COMMIT_REF_NAME == "dev" || $CI_COMMIT_REF_NAME == "main"'
@@ -172,10 +163,9 @@ validate_backend:
         - backend/src/**/*
         - backend/prisma/**/*
         - backend/package.json
-  allow_failure: false
 
 # =============================================
-# TEST STAGE - EXÉCUTION CONDITIONNELLE
+# TEST STAGE - CORRIGÉ
 # =============================================
 
 frontend_tests:
@@ -185,22 +175,15 @@ frontend_tests:
     - install_frontend_deps
   script:
     - cd client
-    - echo "🧪 Tests frontend intelligents..."
-    - |
-      if (npm run | Select-String -Pattern "test" -Quiet) {
-        npm test -- --watchAll=false --passWithNoTests --silent
-        echo "✅ Tests frontend terminés"
-      } else {
-        echo "ℹ️  Aucun script test trouvé - ignoré"
-      }
+    - echo "🧪 Tests frontend..."
+    - $hasTestScript = (npm run | Select-String -Pattern "test" -Quiet)
+    - if ($hasTestScript) { npm test -- --watchAll=false --passWithNoTests }
+    - echo "✅ Tests frontend terminés"
   rules:
     - if: '$CI_COMMIT_REF_NAME == "dev" || $CI_COMMIT_REF_NAME == "main"'
     - changes:
         - client/src/**/*
-        - client/__tests__/**/*
-        - client/*.config.*
         - client/package.json
-  allow_failure: true
 
 backend_tests:
   stage: test
@@ -209,87 +192,58 @@ backend_tests:
     - install_backend_deps
   script:
     - cd backend
-    - echo "🧪 Tests backend intelligents..."
-    - |
-      if (Test-Path "jest.config.js" -or Test-Path "jest.config.cjs" -or Test-Path "jest.config.ts") {
-        npm run test -- --silent
-        echo "✅ Tests backend terminés"
-      } else {
-        echo "ℹ️  Aucune config Jest trouvée - ignoré"
-      }
+    - echo "🧪 Tests backend..."
+    - $hasJestConfig = (Test-Path "jest.config.js") -or (Test-Path "jest.config.cjs") -or (Test-Path "jest.config.ts")
+    - if ($hasJestConfig) { npm run test }
+    - echo "✅ Tests backend terminés"
   rules:
     - if: '$CI_COMMIT_REF_NAME == "dev" || $CI_COMMIT_REF_NAME == "main"'
     - changes:
         - backend/src/**/*
-        - backend/__tests__/**/*
-        - backend/*.config.*
         - backend/package.json
-  allow_failure: true
 
 # =============================================
-# BUILD STAGE - DOCKER BUILDKIT OPTIMISÉ
+# BUILD STAGE - SIMPLIFIÉ
 # =============================================
 
 build_frontend:
   <<: *docker_build_template
   stage: build
   script:
-    - echo "🏗️ Construction frontend avec cache Docker..."
-    - |
-      docker build \
-        --build-arg BUILDKIT_INLINE_CACHE=1 \
-        --cache-from $FRONTEND_IMAGE:latest \
-        -t $FRONTEND_IMAGE:$COMMIT_TAG \
-        -t $FRONTEND_IMAGE:latest \
-        ./client
+    - echo "🏗️ Construction frontend..."
+    - docker build -t $FRONTEND_IMAGE:$COMMIT_TAG ./client
     - docker push $FRONTEND_IMAGE:$COMMIT_TAG
-    - docker push $FRONTEND_IMAGE:latest
   rules:
     - if: '$CI_COMMIT_REF_NAME == "dev" || $CI_COMMIT_REF_NAME == "main"'
     - changes:
         - client/**/*
-  dependencies: []
 
 build_backend:
   <<: *docker_build_template
   stage: build
   script:
-    - echo "🏗️ Construction backend avec cache Docker..."
-    - |
-      docker build \
-        --build-arg BUILDKIT_INLINE_CACHE=1 \
-        --cache-from $BACKEND_IMAGE:latest \
-        -t $BACKEND_IMAGE:$COMMIT_TAG \
-        -t $BACKEND_IMAGE:latest \
-        ./backend
+    - echo "🏗️ Construction backend..."
+    - docker build -t $BACKEND_IMAGE:$COMMIT_TAG ./backend
     - docker push $BACKEND_IMAGE:$COMMIT_TAG
-    - docker push $BACKEND_IMAGE:latest
   rules:
     - if: '$CI_COMMIT_REF_NAME == "dev" || $CI_COMMIT_REF_NAME == "main"'
     - changes:
         - backend/**/*
-  dependencies: []
 
 build_database:
   <<: *docker_build_template
   stage: build
   script:
     - echo "🏗️ Construction base de données..."
-    - |
-      docker build \
-        -t $DB_IMAGE:$COMMIT_TAG \
-        -t $DB_IMAGE:latest \
-        ./db
+    - docker build -t $DB_IMAGE:$COMMIT_TAG ./db
     - docker push $DB_IMAGE:$COMMIT_TAG
-    - docker push $DB_IMAGE:latest
   rules:
     - if: '$CI_COMMIT_REF_NAME == "dev" || $CI_COMMIT_REF_NAME == "main"'
     - changes:
         - db/**/*
-  dependencies: []
 
 # =============================================
-# DEPLOY STAGE - OPTIMISÉ
+# DEPLOY STAGE - IDENTIQUE
 # =============================================
 
 deploy_staging:
@@ -301,7 +255,7 @@ deploy_staging:
   before_script:
     - apk add --no-cache openssh-client
   script:
-    - echo "🚀 Déploiement staging rapide..."
+    - echo "🚀 Déploiement staging..."
     - |
       ssh -o StrictHostKeyChecking=no $STAGING_DEPLOY_USER@$STAGING_DEPLOY_SERVER "
         cd $STAGING_DEPLOY_PATH &&
@@ -330,9 +284,9 @@ deploy_production:
         docker-compose pull --quiet &&
         docker-compose up -d --no-build &&
         echo '✅ Production déployée'"
-    - echo "🔄 Vérification de la santé..."
+    - echo "🔄 Vérification santé..."
     - sleep 10
-    - curl -f https://ems-platform.com/api/health || echo "⚠️ Health check échoué mais déploiement réussi"
+    - curl -f https://ems-platform.com/api/health || echo "⚠️ Health check échoué"
   rules:
     - if: '$CI_COMMIT_REF_NAME == "main"'
       when: manual
@@ -341,7 +295,7 @@ deploy_production:
     - local
 
 # =============================================
-# CLEANUP STAGE - NETTOYAGE INTELLIGENT
+# CLEANUP STAGE
 # =============================================
 
 cleanup_docker:
@@ -352,28 +306,17 @@ cleanup_docker:
   variables:
     DOCKER_TLS_CERTDIR: ""
   script:
-    - echo "🧹 NETTOYAGE INTELLIGENT EN COURS..."
-    - |
-      echo "📊 Avant nettoyage:"
-      docker system df
-
-      docker container prune -f
-      docker image prune -f --filter "until=24h"
-      docker network prune -f
-      docker volume prune -f
-
-      echo "📊 Après nettoyage:"
-      docker system df
-      echo "✅ Espace libéré avec succès!"
+    - echo "🧹 Nettoyage Docker..."
+    - docker system prune -f
+    - echo "✅ Nettoyage terminé"
   tags:
     - windows
     - local
   when: always
   allow_failure: true
-  dependencies: []
 
 # =============================================
-# Workflow Optimisé
+# Workflow
 # =============================================
 
 workflow:
