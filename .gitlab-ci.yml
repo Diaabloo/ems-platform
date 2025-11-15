@@ -128,9 +128,14 @@ validate_frontend:
   script:
     - cd client
     - echo "🔍 Validating frontend..."
-    # Check if node_modules exists, reinstall if cache failed
+    # FIXED: Check if node_modules exists, reinstall if cache failed
     - if (!(Test-Path "node_modules")) {
         echo "❌ Cache missing - reinstalling dependencies..."
+        npm ci --no-audit --prefer-offline
+      }
+    # FIXED: Verify Next.js is available before building
+    - if (!(Test-Path "node_modules/.bin/next") -and !(Test-Path "node_modules/next")) {
+        echo "❌ Next.js not found - reinstalling dependencies..."
         npm ci --no-audit --prefer-offline
       }
     - npm run build
