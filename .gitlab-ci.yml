@@ -1,5 +1,5 @@
-# .gitlab-ci.yml - VERSION OPTIMISÉE CACHE
-# Cache réduit + timeout augmenté
+# .gitlab-ci.yml - VERSION SIMPLIFIÉE ET FONCTIONNELLE
+# Conditions PowerShell corrigées
 
 stages:
   - dependencies
@@ -19,20 +19,12 @@ variables:
   DB_IMAGE: "amineelalami/ems-platform-db"
   COMMIT_TAG: "sha-${CI_COMMIT_SHORT_SHA}"
 
-# =============================================
-# Cache Configuration - OPTIMISÉ
-# =============================================
-
 cache:
   key: "npm-${CI_COMMIT_REF_SLUG}"
   paths:
     - client/node_modules/
     - backend/node_modules/
   policy: pull-push
-  # Réduire la taille du cache
-  when: on_success
-  # Compression pour réduire le temps
-  untracked: false
 
 .docker_build_template: &docker_build_template
   image: docker:24
@@ -47,7 +39,7 @@ cache:
   tags:
     - windows
     - local
-  timeout: 20 minutes  # Augmenté pour les builds
+  timeout: 20 minutes
 
 .node_template: &node_template
   image: node:${NODE_VERSION}
@@ -60,44 +52,48 @@ cache:
   tags:
     - windows
     - local
-  timeout: 15 minutes  # Augmenté pour le cache
+  timeout: 15 minutes
 
 # =============================================
-# DEPENDENCIES STAGE - OPTIMISÉ
+# DEPENDENCIES STAGE - CONDITIONS CORRIGÉES
 # =============================================
 
 install_all_deps:
   stage: dependencies
   <<: *node_template
   script:
-    - Write-Host "📦 Installing dependencies (optimized cache)..."
+    - Write-Host "📦 Installing dependencies..."
 
-    # Nettoyage sélectif seulement si nécessaire
+    # NETTOYAGE SIMPLIFIÉ - Conditions corrigées
     - |
-      if (Test-Path "client/node_modules" -and (Get-ChildItem "client/node_modules" | Measure-Object).Count -gt 10000) {
-        Write-Host "🧹 Cleaning large client/node_modules..."
+      if (Test-Path "client/node_modules") {
+        Write-Host "🧹 Cleaning client/node_modules..."
         Remove-Item -Recurse -Force client/node_modules -ErrorAction SilentlyContinue
+      } else {
+        Write-Host "ℹ️ client/node_modules not found - skipping clean"
       }
     - |
-      if (Test-Path "backend/node_modules" -and (Get-ChildItem "backend/node_modules" | Measure-Object).Count -gt 10000) {
-        Write-Host "🧹 Cleaning large backend/node_modules..."
+      if (Test-Path "backend/node_modules") {
+        Write-Host "🧹 Cleaning backend/node_modules..."
         Remove-Item -Recurse -Force backend/node_modules -ErrorAction SilentlyContinue
+      } else {
+        Write-Host "ℹ️ backend/node_modules not found - skipping clean"
       }
 
-    # Installation frontend optimisée
+    # Installation frontend
     - cd client
     - npm ci --no-audit --prefer-offline --silent
     - Write-Host "✅ Frontend dependencies installed"
     - cd ..
 
-    # Installation backend optimisée
+    # Installation backend
     - cd backend
     - npm ci --no-audit --prefer-offline --silent
-    - npx prisma generate --no-hints  # Réduire la sortie
+    - npx prisma generate --no-hints
     - Write-Host "✅ Backend dependencies installed"
     - cd ..
 
-    - Write-Host "🎉 Dependencies installed successfully"
+    - Write-Host "🎉 All dependencies installed successfully"
   cache:
     key: "npm-${CI_COMMIT_REF_SLUG}"
     paths:
@@ -106,8 +102,6 @@ install_all_deps:
     policy: pull-push
   rules:
     - if: '$CI_COMMIT_REF_NAME == "dev" || $CI_COMMIT_REF_NAME == "main"'
-  # Ne pas sauvegarder le cache si le job échoue
-  when: on_success
 
 # =============================================
 # SECURITY STAGE
@@ -117,7 +111,7 @@ security_scan:
   stage: security
   image: node:${NODE_VERSION}
   script:
-    - Write-Host "🔒 Quick security scan..."
+    - Write-Host "🔒 Security scan..."
     - |
       if (Test-Path "client/package.json") {
         cd client
@@ -137,7 +131,6 @@ security_scan:
   tags:
     - windows
     - local
-  timeout: 5 minutes
 
 database_schema_validation:
   stage: security
@@ -151,7 +144,7 @@ database_schema_validation:
     DATABASE_URL: "postgresql://tester:test_password@postgres:5432/test_employeedb"
   script:
     - cd backend
-    - Write-Host "🗄️ Quick database validation..."
+    - Write-Host "🗄️ Database validation..."
     - npx prisma validate
     - npx prisma migrate reset --force --skip-seed
     - npx prisma migrate deploy
@@ -161,38 +154,36 @@ database_schema_validation:
   tags:
     - windows
     - local
-  timeout: 5 minutes
 
 # =============================================
-# VALIDATE + TEST STAGE - OPTIMISÉ
+# VALIDATE + TEST STAGE
 # =============================================
 
 validate_frontend:
   stage: validate_test
   <<: *node_template
   script:
-    - Write-Host "🔍 Quick frontend validation..."
+    - Write-Host "🔍 Validating frontend..."
     - cd client
     - |
       if (!(Test-Path "node_modules")) {
-        Write-Host "Installing frontend deps..."
+        Write-Host "Installing frontend dependencies..."
         npm ci --no-audit --prefer-offline --silent
       }
     - npm run build
     - Write-Host "✅ Frontend validated"
   rules:
     - if: '$CI_COMMIT_REF_NAME == "dev" || $CI_COMMIT_REF_NAME == "main"'
-  timeout: 8 minutes
 
 validate_backend:
   stage: validate_test
   <<: *node_template
   script:
-    - Write-Host "🔍 Quick backend validation..."
+    - Write-Host "🔍 Validating backend..."
     - cd backend
     - |
       if (!(Test-Path "node_modules")) {
-        Write-Host "Installing backend deps..."
+        Write-Host "Installing backend dependencies..."
         npm ci --no-audit --prefer-offline --silent
       }
     - |
@@ -203,13 +194,12 @@ validate_backend:
     - Write-Host "✅ Backend validated"
   rules:
     - if: '$CI_COMMIT_REF_NAME == "dev" || $CI_COMMIT_REF_NAME == "main"'
-  timeout: 5 minutes
 
 run_all_tests:
   stage: validate_test
   <<: *node_template
   script:
-    - Write-Host "🧪 Quick tests..."
+    - Write-Host "🧪 Running tests..."
 
     # Frontend tests
     - cd client
@@ -233,7 +223,6 @@ run_all_tests:
   rules:
     - if: '$CI_COMMIT_REF_NAME == "dev" || $CI_COMMIT_REF_NAME == "main"'
   allow_failure: false
-  timeout: 8 minutes
 
 # =============================================
 # BUILD STAGE
@@ -284,15 +273,14 @@ test_database_image:
   variables:
     DOCKER_TLS_CERTDIR: ""
   script:
-    - Write-Host "🗄️ Testing DB image..."
+    - Write-Host "🗄️ Testing database image..."
     - docker build -t $DB_IMAGE:test ./db
-    - Write-Host "✅ DB image tested"
+    - Write-Host "✅ Database image tested"
   rules:
     - if: '$CI_COMMIT_REF_NAME == "dev" || $CI_COMMIT_REF_NAME == "main"'
   tags:
     - windows
     - local
-  timeout: 5 minutes
 
 # =============================================
 # DEPLOY + CLEANUP
@@ -307,20 +295,19 @@ deploy_staging:
   before_script:
     - apk add --no-cache openssh-client
   script:
-    - Write-Host "🚀 Deploying staging..."
+    - Write-Host "🚀 Deploying to staging..."
     - |
       ssh -o StrictHostKeyChecking=no $STAGING_DEPLOY_USER@$STAGING_DEPLOY_SERVER "
         cd $STAGING_DEPLOY_PATH &&
         docker-compose pull --quiet &&
         docker-compose up -d --no-build frontend backend &&
-        echo 'Deployed'"
+        echo '✅ Staging deployment completed'"
     - Write-Host "✅ Staging deployed"
   rules:
     - if: '$CI_COMMIT_REF_NAME == "dev"'
   tags:
     - windows
     - local
-  timeout: 10 minutes
 
 deploy_production:
   stage: deploy
@@ -331,13 +318,13 @@ deploy_production:
   before_script:
     - apk add --no-cache openssh-client curl
   script:
-    - Write-Host "🚀 Deploying production..."
+    - Write-Host "🚀 Deploying to production..."
     - |
       ssh -o StrictHostKeyChecking=no $DEPLOY_USER@$DEPLOY_SERVER "
         cd $DEPLOY_PATH &&
         docker-compose pull --quiet &&
         docker-compose up -d --no-build &&
-        echo 'Deployed'"
+        echo '✅ Production deployment completed'"
     - Write-Host "🔄 Health check..."
     - sleep 10
     - curl -f https://ems-platform.com/api/health || exit 1
@@ -348,7 +335,6 @@ deploy_production:
   tags:
     - windows
     - local
-  timeout: 15 minutes
 
 cleanup_docker:
   stage: cleanup
@@ -358,15 +344,14 @@ cleanup_docker:
   variables:
     DOCKER_TLS_CERTDIR: ""
   script:
-    - Write-Host "🧹 Quick cleanup..."
+    - Write-Host "🧹 Cleaning up Docker..."
     - docker system prune -f
-    - Write-Host "✅ Cleanup done"
+    - Write-Host "✅ Cleanup completed"
   tags:
     - windows
     - local
   when: always
   allow_failure: true
-  timeout: 3 minutes
 
 workflow:
   rules:
