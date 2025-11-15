@@ -1,5 +1,5 @@
-# .gitlab-ci.yml - VERSION SIMPLIFIÉE ET FONCTIONNELLE
-# Conditions PowerShell corrigées
+# .gitlab-ci.yml - VERSION ULTIME OPTIMISÉE
+# Toutes vos suggestions appliquées
 
 stages:
   - dependencies
@@ -19,12 +19,19 @@ variables:
   DB_IMAGE: "amineelalami/ems-platform-db"
   COMMIT_TAG: "sha-${CI_COMMIT_SHORT_SHA}"
 
+# =============================================
+# Cache Configuration - OPTIMISÉ (Votre suggestion 4b)
+# =============================================
+
 cache:
   key: "npm-${CI_COMMIT_REF_SLUG}"
   paths:
     - client/node_modules/
     - backend/node_modules/
   policy: pull-push
+  # Exclure les fichiers inutiles du cache
+  untracked: false
+  when: on_success
 
 .docker_build_template: &docker_build_template
   image: docker:24
@@ -39,7 +46,7 @@ cache:
   tags:
     - windows
     - local
-  timeout: 20 minutes
+  timeout: 25 minutes  # Augmenté (Votre suggestion 2a)
 
 .node_template: &node_template
   image: node:${NODE_VERSION}
@@ -52,48 +59,76 @@ cache:
   tags:
     - windows
     - local
-  timeout: 15 minutes
+  timeout: 25 minutes  # Augmenté (Votre suggestion 2a)
 
 # =============================================
-# DEPENDENCIES STAGE - CONDITIONS CORRIGÉES
+# DEPENDENCIES STAGE - OPTIMISÉ
 # =============================================
 
 install_all_deps:
   stage: dependencies
   <<: *node_template
+  timeout: 30 minutes  # Timeout spécifique augmenté (Votre suggestion 3)
   script:
-    - Write-Host "📦 Installing dependencies..."
+    - Write-Host "📦 Installing dependencies (optimized)..."
 
-    # NETTOYAGE SIMPLIFIÉ - Conditions corrigées
+    # Nettoyage conditionnel seulement si vraiment nécessaire
     - |
       if (Test-Path "client/node_modules") {
         Write-Host "🧹 Cleaning client/node_modules..."
         Remove-Item -Recurse -Force client/node_modules -ErrorAction SilentlyContinue
-      } else {
-        Write-Host "ℹ️ client/node_modules not found - skipping clean"
       }
     - |
       if (Test-Path "backend/node_modules") {
         Write-Host "🧹 Cleaning backend/node_modules..."
         Remove-Item -Recurse -Force backend/node_modules -ErrorAction SilentlyContinue
-      } else {
-        Write-Host "ℹ️ backend/node_modules not found - skipping clean"
       }
 
-    # Installation frontend
+    # Installation frontend avec logs détaillés (Votre suggestion 2d)
     - cd client
-    - npm ci --no-audit --prefer-offline --silent
+    - Write-Host "📦 Installing frontend dependencies (this may take a while)..."
+    - npm ci --no-audit --prefer-offline  # Retiré --silent temporairement
     - Write-Host "✅ Frontend dependencies installed"
     - cd ..
 
-    # Installation backend
+    # Installation backend avec logs détaillés
     - cd backend
-    - npm ci --no-audit --prefer-offline --silent
+    - Write-Host "📦 Installing backend dependencies (this may take a while)..."
+    - npm ci --no-audit --prefer-offline  # Retiré --silent temporairement
     - npx prisma generate --no-hints
     - Write-Host "✅ Backend dependencies installed"
     - cd ..
 
+    # Nettoyer les fichiers inutiles AVANT la sauvegarde du cache (Votre suggestion 4b)
+    - Write-Host "🧹 Cleaning unnecessary files before cache..."
+    - |
+      # Fichiers à exclure du cache pour réduire la taille
+      $excludePatterns = @(
+        "**/*.log",
+        "**/.cache/**",
+        "**/test/**",
+        "**/tests/**",
+        "**/__tests__/**",
+        "**/coverage/**",
+        "**/nyc_output/**",
+        "**/.nyc_output/**",
+        "**/.next/cache/**",
+        "**/node_modules/.cache/**",
+        "**/node_modules/.bin/**",
+        "**/node_modules/*/test/**",
+        "**/node_modules/*/tests/**",
+        "**/node_modules/*/doc/**",
+        "**/node_modules/*/docs/**"
+      )
+
+      foreach ($pattern in $excludePatterns) {
+        if (Test-Path $pattern) {
+          Get-ChildItem -Path . -Recurse -Include $pattern -ErrorAction SilentlyContinue | Remove-Item -Recurse -Force -ErrorAction SilentlyContinue
+        }
+      }
+
     - Write-Host "🎉 All dependencies installed successfully"
+    - Write-Host "📊 Cache optimization completed"
   cache:
     key: "npm-${CI_COMMIT_REF_SLUG}"
     paths:
@@ -102,6 +137,8 @@ install_all_deps:
     policy: pull-push
   rules:
     - if: '$CI_COMMIT_REF_NAME == "dev" || $CI_COMMIT_REF_NAME == "main"'
+  # Ne sauvegarder le cache que si vraiment nécessaire (Votre suggestion 2b)
+  when: on_success
 
 # =============================================
 # SECURITY STAGE
@@ -131,6 +168,7 @@ security_scan:
   tags:
     - windows
     - local
+  timeout: 8 minutes
 
 database_schema_validation:
   stage: security
@@ -154,6 +192,7 @@ database_schema_validation:
   tags:
     - windows
     - local
+  timeout: 8 minutes
 
 # =============================================
 # VALIDATE + TEST STAGE
@@ -174,6 +213,7 @@ validate_frontend:
     - Write-Host "✅ Frontend validated"
   rules:
     - if: '$CI_COMMIT_REF_NAME == "dev" || $CI_COMMIT_REF_NAME == "main"'
+  timeout: 10 minutes
 
 validate_backend:
   stage: validate_test
@@ -194,6 +234,7 @@ validate_backend:
     - Write-Host "✅ Backend validated"
   rules:
     - if: '$CI_COMMIT_REF_NAME == "dev" || $CI_COMMIT_REF_NAME == "main"'
+  timeout: 8 minutes
 
 run_all_tests:
   stage: validate_test
@@ -223,6 +264,7 @@ run_all_tests:
   rules:
     - if: '$CI_COMMIT_REF_NAME == "dev" || $CI_COMMIT_REF_NAME == "main"'
   allow_failure: false
+  timeout: 10 minutes
 
 # =============================================
 # BUILD STAGE
@@ -281,6 +323,7 @@ test_database_image:
   tags:
     - windows
     - local
+  timeout: 8 minutes
 
 # =============================================
 # DEPLOY + CLEANUP
@@ -308,6 +351,7 @@ deploy_staging:
   tags:
     - windows
     - local
+  timeout: 15 minutes
 
 deploy_production:
   stage: deploy
@@ -335,6 +379,7 @@ deploy_production:
   tags:
     - windows
     - local
+  timeout: 20 minutes
 
 cleanup_docker:
   stage: cleanup
@@ -352,6 +397,7 @@ cleanup_docker:
     - local
   when: always
   allow_failure: true
+  timeout: 5 minutes
 
 workflow:
   rules:
