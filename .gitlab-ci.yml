@@ -174,12 +174,16 @@ database_schema_validation:
   stage: security
   image: node:${NODE_VERSION}
   services:
-    - postgres:${POSTGRES_VERSION}
+    - name: postgres:${POSTGRES_VERSION}
+      alias: postgres
   variables:
-    POSTGRES_DB: test_employeedb
-    POSTGRES_USER: tester
-    POSTGRES_PASSWORD: test_password
-    DATABASE_URL: "postgresql://tester:test_password@postgres:5432/test_employeedb"
+    DATABASE_URL: "postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}?schema=public"
+  before_script:
+    - apk add --no-cache postgresql-client  # Pour avoir psql
+    - |
+      echo "🔄 Waiting for PostgreSQL to be ready..."
+      timeout 60s sh -c 'until pg_isready -h postgres -p 5432; do sleep 2; done'
+      echo "✅ PostgreSQL is ready"
   script:
     - cd backend
     - Write-Host "🗄️ Database validation..."
@@ -192,7 +196,7 @@ database_schema_validation:
   tags:
     - windows
     - local
-  timeout: 8 minutes
+  timeout: 10 minutes
 
 # =============================================
 # VALIDATE + TEST STAGE
