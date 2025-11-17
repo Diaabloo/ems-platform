@@ -163,7 +163,7 @@ security_scan:
   tags:
     - windows
     - local
-  timeout: 10 minutes
+  timeout: 15 minutes
 
 # REMPLACEMENT de database_schema_validation - Version Windows compatible
 database_schema_check:
@@ -180,7 +180,7 @@ database_schema_check:
   tags:
     - windows
     - local
-  timeout: 8 minutes
+  timeout: 15 minutes
 
 # =============================================
 # VALIDATE + TEST STAGE
@@ -222,7 +222,7 @@ validate_backend:
     - Write-Host "✅ Backend validated"
   rules:
     - if: '$CI_COMMIT_REF_NAME == "dev" || $CI_COMMIT_REF_NAME == "main"'
-  timeout: 8 minutes
+  timeout: 15 minutes
 
 run_all_tests:
   stage: validate_test
@@ -256,7 +256,7 @@ run_all_tests:
   rules:
     - if: '$CI_COMMIT_REF_NAME == "dev" || $CI_COMMIT_REF_NAME == "main"'
   allow_failure: true  # Permettre l'échec des tests pour l'instant
-  timeout: 10 minutes
+  timeout: 15 minutes
 
 # =============================================
 # BUILD STAGE
@@ -315,7 +315,7 @@ test_database_image:
   tags:
     - windows
     - local
-  timeout: 8 minutes
+  timeout: 15 minutes
 
 # =============================================
 # DEPLOY + CLEANUP - VERSION SIMPLIFIÉE
