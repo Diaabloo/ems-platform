@@ -94,6 +94,7 @@ install_frontend_deps:
     - changes:
         - client/package.json        # CORRIGÉ
         - client/package-lock.json   # CORRIGÉ
+      if: '$CI_COMMIT_REF_NAME == "dev" || $CI_COMMIT_REF_NAME == "main"'
     - when: never
   timeout: 15 minutes
 
@@ -116,6 +117,7 @@ install_backend_deps:
         - backend/package.json
         - backend/package-lock.json
         - backend/prisma/schema.prisma
+      if: '$CI_COMMIT_REF_NAME == "dev" || $CI_COMMIT_REF_NAME == "main"'
     - when: never
   timeout: 10 minutes
 
