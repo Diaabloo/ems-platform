@@ -95,7 +95,7 @@ install_frontend_deps:
         - client/package.json        # CORRIGÉ
         - client/package-lock.json   # CORRIGÉ
     - if: '$CI_COMMIT_REF_NAME == "dev" || $CI_COMMIT_REF_NAME == "main"'
-  timeout: 10 minutes
+  timeout: 15 minutes
 
 install_backend_deps:
   stage: dependencies

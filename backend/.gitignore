@@ -1,12 +1,42 @@
+# Node
+node_modules
+dist
+build
+
+# Prisma
 /src/generated/prisma
+
+# Backups
 /backups
-/node_modules
-/.env
-/.env.local
-/.env.*.local
-.DS_Store
+
+# Env
+.env
+.env.local
+.env.development
+.env.production
+.env.*.local
+
+# Logs
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
 pnpm-debug.log*
-/dist
+*.log
+
+# IDE
+.vscode
+.DS_Store
+
+# Docker
+docker-compose.yml
+Dockerfile*
+.dockerignore
+
+# Coverage
+coverage
+
+# Markdown
+*.md
+
+# Shared folder (si inutile dans git)
+shared/
