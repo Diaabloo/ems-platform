@@ -25,9 +25,6 @@ pnpm-debug.log*
 .vscode/
 
 # Docker (pour éviter que le Dockerfile soit utilisé dans le contexte Build, sauf si tu en as vraiment besoin)
-Dockerfile
-Dockerfile*
-docker-compose.yml
 .dockerignore
 
 # Typescript

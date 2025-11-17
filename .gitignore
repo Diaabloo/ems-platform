@@ -1,5 +1,13 @@
+# Dumps et données locales
 employeedb_dump.sql
 .hintrc
 .env
 postgres-data
 /db/*.sql
+
+# Logs globaux
+*.log
+
+# IDE
+.vscode/
+.DS_Store

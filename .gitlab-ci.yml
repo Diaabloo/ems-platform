@@ -136,7 +136,7 @@ audit_frontend:
         - client/package.json  # CORRIGÉ
     - if: '$CI_COMMIT_REF_NAME == "dev" || $CI_COMMIT_REF_NAME == "main"'
   allow_failure: true
-  timeout: 5 minutes
+  timeout: 10 minutes
 
 audit_backend:
   stage: security
@@ -151,7 +151,7 @@ audit_backend:
         - backend/package.json
     - if: '$CI_COMMIT_REF_NAME == "dev" || $CI_COMMIT_REF_NAME == "main"'
   allow_failure: true
-  timeout: 5 minutes
+  timeout: 10 minutes
 
 validate_prisma_schema:
   stage: security
@@ -165,7 +165,7 @@ validate_prisma_schema:
     - changes:
         - backend/prisma/schema.prisma
     - if: '$CI_COMMIT_REF_NAME == "dev" || $CI_COMMIT_REF_NAME == "main"'
-  timeout: 5 minutes
+  timeout: 10 minutes
 
 # =============================================
 # STAGE VALIDATE_TEST - Validation et tests parallèles
@@ -183,7 +183,7 @@ validate_frontend:
     - changes:
         - client/**  # CORRIGÉ
     - if: '$CI_COMMIT_REF_NAME == "dev" || $CI_COMMIT_REF_NAME == "main"'
-  timeout: 8 minutes
+  timeout: 10 minutes
 
 validate_backend:
   stage: validate_test

@@ -28,8 +28,6 @@ pnpm-debug.log*
 .DS_Store
 
 # Docker
-docker-compose.yml
-Dockerfile*
 .dockerignore
 
 # Coverage
