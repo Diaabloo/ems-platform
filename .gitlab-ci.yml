@@ -1,5 +1,5 @@
-# .gitlab-ci.yml - VERSION PROFESSIONNELLE PERN STACK
-# Optimisé pour Windows + Docker-in-Docker avec migration Linux facile
+# .gitlab-ci.yml - VERSION CORRIGÉE POUR VOTRE STRUCTURE
+# Adapté pour client/ et backend/ (au lieu de frontend/ et backend/)
 
 # =============================================
 # CONFIGURATION GLOBALE
@@ -40,7 +40,7 @@ variables:
 cache:
   key: "npm-${CI_COMMIT_REF_SLUG}"
   paths:
-    - frontend/node_modules/
+    - client/node_modules/      # CORRIGÉ : client/ au lieu de frontend/
     - backend/node_modules/
   policy: pull-push
   untracked: false
@@ -63,7 +63,6 @@ cache:
   tags:
     - windows
     - local
-  # Note migration Linux: remplacer tags par -> tags: [docker, linux]
 
 .node_template: &node_template
   image: node:${NODE_VERSION}
@@ -73,7 +72,6 @@ cache:
   tags:
     - windows
     - local
-  # Note migration Linux: remplacer tags par -> tags: [docker, linux]
 
 # =============================================
 # STAGE DEPENDENCIES - Installation séparée par service
@@ -84,19 +82,19 @@ install_frontend_deps:
   <<: *node_template
   script:
     - Write-Host "📦 Installation des dépendances Frontend..."
-    - cd frontend
+    - cd client  # CORRIGÉ : client/ au lieu de frontend/
     - npm install --prefer-offline --no-audit
     - Write-Host "✅ Dépendances Frontend installées"
   cache:
     key: "npm-${CI_COMMIT_REF_SLUG}"
     paths:
-      - frontend/node_modules/
+      - client/node_modules/  # CORRIGÉ : client/ au lieu de frontend/
     policy: pull-push
   rules:
     - changes:
-        - frontend/package.json
-        - frontend/package-lock.json
-    - if: '$CI_COMMIT_REF_NAME == "main"'
+        - client/package.json        # CORRIGÉ
+        - client/package-lock.json   # CORRIGÉ
+    - if: '$CI_COMMIT_REF_NAME == "dev" || $CI_COMMIT_REF_NAME == "main"'
   timeout: 10 minutes
 
 install_backend_deps:
@@ -118,7 +116,7 @@ install_backend_deps:
         - backend/package.json
         - backend/package-lock.json
         - backend/prisma/schema.prisma
-    - if: '$CI_COMMIT_REF_NAME == "main"'
+    - if: '$CI_COMMIT_REF_NAME == "dev" || $CI_COMMIT_REF_NAME == "main"'
   timeout: 10 minutes
 
 # =============================================
@@ -130,13 +128,13 @@ audit_frontend:
   <<: *node_template
   script:
     - Write-Host "🔒 Audit de sécurité Frontend..."
-    - cd frontend
+    - cd client  # CORRIGÉ : client/ au lieu de frontend/
     - npm audit --audit-level high --production
     - Write-Host "✅ Audit Frontend complété"
   rules:
     - changes:
-        - frontend/package.json
-    - if: '$CI_COMMIT_REF_NAME == "main"'
+        - client/package.json  # CORRIGÉ
+    - if: '$CI_COMMIT_REF_NAME == "dev" || $CI_COMMIT_REF_NAME == "main"'
   allow_failure: true
   timeout: 5 minutes
 
@@ -151,7 +149,7 @@ audit_backend:
   rules:
     - changes:
         - backend/package.json
-    - if: '$CI_COMMIT_REF_NAME == "main"'
+    - if: '$CI_COMMIT_REF_NAME == "dev" || $CI_COMMIT_REF_NAME == "main"'
   allow_failure: true
   timeout: 5 minutes
 
@@ -166,7 +164,7 @@ validate_prisma_schema:
   rules:
     - changes:
         - backend/prisma/schema.prisma
-    - if: '$CI_COMMIT_REF_NAME == "main"'
+    - if: '$CI_COMMIT_REF_NAME == "dev" || $CI_COMMIT_REF_NAME == "main"'
   timeout: 3 minutes
 
 # =============================================
@@ -178,13 +176,13 @@ validate_frontend:
   <<: *node_template
   script:
     - Write-Host "🔍 Validation du build Frontend..."
-    - cd frontend
+    - cd client  # CORRIGÉ : client/ au lieu de frontend/
     - npm run build
     - Write-Host "✅ Frontend validé avec succès"
   rules:
     - changes:
-        - frontend/**
-    - if: '$CI_COMMIT_REF_NAME == "main"'
+        - client/**  # CORRIGÉ
+    - if: '$CI_COMMIT_REF_NAME == "dev" || $CI_COMMIT_REF_NAME == "main"'
   timeout: 8 minutes
 
 validate_backend:
@@ -198,7 +196,7 @@ validate_backend:
   rules:
     - changes:
         - backend/**
-    - if: '$CI_COMMIT_REF_NAME == "main"'
+    - if: '$CI_COMMIT_REF_NAME == "dev" || $CI_COMMIT_REF_NAME == "main"'
   timeout: 6 minutes
 
 test_frontend:
@@ -206,7 +204,7 @@ test_frontend:
   <<: *node_template
   script:
     - Write-Host "🧪 Exécution des tests Frontend..."
-    - cd frontend
+    - cd client  # CORRIGÉ : client/ au lieu de frontend/
     - |
       # Exécution conditionnelle des tests
       if (Test-Path "package.json") {
@@ -220,8 +218,8 @@ test_frontend:
       }
   rules:
     - changes:
-        - frontend/**
-    - if: '$CI_COMMIT_REF_NAME == "main"'
+        - client/**  # CORRIGÉ
+    - if: '$CI_COMMIT_REF_NAME == "dev" || $CI_COMMIT_REF_NAME == "main"'
   allow_failure: true
   timeout: 8 minutes
 
@@ -245,7 +243,7 @@ test_backend:
   rules:
     - changes:
         - backend/**
-    - if: '$CI_COMMIT_REF_NAME == "main"'
+    - if: '$CI_COMMIT_REF_NAME == "dev" || $CI_COMMIT_REF_NAME == "main"'
   allow_failure: true
   timeout: 8 minutes
 
@@ -258,7 +256,7 @@ build_frontend_image:
   <<: *docker_template
   script:
     - Write-Host "🏗️ Construction de l'image Frontend..."
-    - docker build -t $FRONTEND_IMAGE:$COMMIT_TAG ./frontend
+    - docker build -t $FRONTEND_IMAGE:$COMMIT_TAG ./client  # CORRIGÉ : ./client
     - |
       # Push conditionnel - UNIQUEMENT sur main ou tags
       if [[ "$CI_COMMIT_REF_NAME" == "main" || "$CI_COMMIT_TAG" ]]; then
@@ -266,12 +264,12 @@ build_frontend_image:
         docker push $FRONTEND_IMAGE:$COMMIT_TAG
       else
         Write-Host "⏭️ Push ignoré (branche: $CI_COMMIT_REF_NAME)"
-      }
+      fi
     - Write-Host "✅ Image Frontend construite"
   rules:
     - changes:
-        - frontend/**
-        - frontend/Dockerfile*
+        - client/**        # CORRIGÉ
+        - client/Dockerfile*
     - if: '$CI_COMMIT_REF_NAME == "main"'
   timeout: 15 minutes
 
@@ -286,9 +284,9 @@ build_backend_image:
       if [[ "$CI_COMMIT_REF_NAME" == "main" || "$CI_COMMIT_TAG" ]]; then
         Write-Host "🚀 Push de l'image Backend..."
         docker push $BACKEND_IMAGE:$COMMIT_TAG
-      else {
+      else
         Write-Host "⏭️ Push ignoré (branche: $CI_COMMIT_REF_NAME)"
-      }
+      fi
     - Write-Host "✅ Image Backend construite"
   rules:
     - changes:
@@ -308,9 +306,9 @@ build_db_image:
       if [[ "$CI_COMMIT_REF_NAME" == "main" || "$CI_COMMIT_TAG" ]]; then
         Write-Host "🚀 Push de l'image Database..."
         docker push $DB_IMAGE:$COMMIT_TAG
-      else {
+      else
         Write-Host "⏭️ Push ignoré (branche: $CI_COMMIT_REF_NAME)"
-      }
+      fi
     - Write-Host "✅ Image Database construite"
   rules:
     - changes:
@@ -318,37 +316,6 @@ build_db_image:
         - db/Dockerfile*
     - if: '$CI_COMMIT_REF_NAME == "main"'
   timeout: 10 minutes
-
-# =============================================
-# OPTION: Build unique des 3 images (décommenter si préféré)
-# =============================================
-
-# build_all_images:
-#   stage: build
-#   <<: *docker_template
-#   script:
-#     - Write-Host "🏗️ Construction groupée des images..."
-#     - docker build -t $FRONTEND_IMAGE:$COMMIT_TAG ./frontend
-#     - docker build -t $BACKEND_IMAGE:$COMMIT_TAG ./backend
-#     - docker build -t $DB_IMAGE:$COMMIT_TAG ./db
-#     - |
-#       if [[ "$CI_COMMIT_REF_NAME" == "main" || "$CI_COMMIT_TAG" ]]; then
-#         Write-Host "🚀 Push groupé des images..."
-#         docker push $FRONTEND_IMAGE:$COMMIT_TAG
-#         docker push $BACKEND_IMAGE:$COMMIT_TAG
-#         docker push $DB_IMAGE:$COMMIT_TAG
-#       fi
-#     - Write-Host "✅ Toutes les images construites"
-#   rules:
-#     - changes:
-#         - frontend/**
-#         - backend/**
-#         - db/**
-#         - Dockerfile*
-#     - if: '$CI_COMMIT_REF_NAME == "main"'
-#   timeout: 25 minutes
-#   # AVANTAGE: Plus simple, moins de jobs
-#   # INCONVÉNIENT: Moins visible dans l'UI, rebuild tout même si un seul service change
 
 # =============================================
 # STAGE DEPLOY - Déploiement
@@ -438,15 +405,3 @@ workflow:
     - if: '$CI_COMMIT_BRANCH == "dev"'
     - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
     - if: '$CI_COMMIT_TAG'
-
-# =============================================
-# NOTES MIGRATION LINUX
-# =============================================
-
-# Pour migrer vers un runner Linux:
-# 1. Changer les tags: [windows, local] -> [docker, linux]
-# 2. Option Docker socket (plus rapide que dind):
-#    - Supprimer le service docker:24-dind
-#    - Ajouter: /var/run/docker.sock:/var/run/docker.sock
-#    - Variables: DOCKER_HOST: unix:///var/run/docker.sock
-# 3. Adapter les commandes PowerShell vers shell
