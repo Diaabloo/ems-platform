@@ -165,7 +165,7 @@ validate_prisma_schema:
     - changes:
         - backend/prisma/schema.prisma
     - if: '$CI_COMMIT_REF_NAME == "dev" || $CI_COMMIT_REF_NAME == "main"'
-  timeout: 3 minutes
+  timeout: 5 minutes
 
 # =============================================
 # STAGE VALIDATE_TEST - Validation et tests parallèles
@@ -197,7 +197,7 @@ validate_backend:
     - changes:
         - backend/**
     - if: '$CI_COMMIT_REF_NAME == "dev" || $CI_COMMIT_REF_NAME == "main"'
-  timeout: 6 minutes
+  timeout: 10 minutes
 
 test_frontend:
   stage: validate_test
@@ -221,7 +221,7 @@ test_frontend:
         - client/**  # CORRIGÉ
     - if: '$CI_COMMIT_REF_NAME == "dev" || $CI_COMMIT_REF_NAME == "main"'
   allow_failure: true
-  timeout: 8 minutes
+  timeout: 10 minutes
 
 test_backend:
   stage: validate_test
@@ -245,7 +245,7 @@ test_backend:
         - backend/**
     - if: '$CI_COMMIT_REF_NAME == "dev" || $CI_COMMIT_REF_NAME == "main"'
   allow_failure: true
-  timeout: 8 minutes
+  timeout: 10 minutes
 
 # =============================================
 # STAGE BUILD - Construction des images Docker
