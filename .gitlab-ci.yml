@@ -170,12 +170,11 @@ database_schema_check:
   stage: security
   image: node:${NODE_VERSION}
   script:
-    - Write-Host "🗄️ Database schema validation (Prisma only)..."
+    - Write-Host "🗄️ Database schema validation (Schema only - No DB connection)..."
     - cd backend
     - npx prisma validate
-    # REMPLACER cette ligne problématique :
-    - npx prisma db push --skip-generate
-    - Write-Host "✅ Database schema validated"
+    - npx prisma generate
+    - Write-Host "✅ Database schema validated successfully"
   rules:
     - if: '$CI_COMMIT_REF_NAME == "dev" || $CI_COMMIT_REF_NAME == "main"'
   tags:
