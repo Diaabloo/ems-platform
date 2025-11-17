@@ -1,3 +1,6 @@
+# .gitlab-ci.yml - OPTIMIZED FOR dev/main WORKFLOW
+# dev = pre-production, main = production
+
 stages:
   - dependencies
   - security
@@ -26,7 +29,6 @@ cache:
     - backend/node_modules/
   policy: pull-push
   untracked: false
-  when: on_success
 
 .docker_template: &docker_template
   image: docker:24
@@ -66,10 +68,7 @@ install_frontend_deps:
     policy: pull-push
   rules:
     - if: '$CI_COMMIT_REF_NAME == "dev" || $CI_COMMIT_REF_NAME == "main"'
-      changes:
-        - client/package.json
-        - client/package-lock.json
-  timeout: 15 minutes
+  timeout: 10 minutes
 
 install_backend_deps:
   stage: dependencies
@@ -87,11 +86,7 @@ install_backend_deps:
     policy: pull-push
   rules:
     - if: '$CI_COMMIT_REF_NAME == "dev" || $CI_COMMIT_REF_NAME == "main"'
-      changes:
-        - backend/package.json
-        - backend/package-lock.json
-        - backend/prisma/schema.prisma
-  timeout: 15 minutes
+  timeout: 10 minutes
 
 audit_frontend:
   stage: security
@@ -103,10 +98,8 @@ audit_frontend:
     - Write-Host "✅ Frontend audit completed"
   rules:
     - if: '$CI_COMMIT_REF_NAME == "dev" || $CI_COMMIT_REF_NAME == "main"'
-      changes:
-        - client/package.json
   allow_failure: true
-  timeout: 10 minutes
+  timeout: 5 minutes
 
 audit_backend:
   stage: security
@@ -118,10 +111,8 @@ audit_backend:
     - Write-Host "✅ Backend audit completed"
   rules:
     - if: '$CI_COMMIT_REF_NAME == "dev" || $CI_COMMIT_REF_NAME == "main"'
-      changes:
-        - backend/package.json
   allow_failure: true
-  timeout: 10 minutes
+  timeout: 5 minutes
 
 validate_prisma_schema:
   stage: security
@@ -133,9 +124,7 @@ validate_prisma_schema:
     - Write-Host "✅ Prisma schema validated"
   rules:
     - if: '$CI_COMMIT_REF_NAME == "dev" || $CI_COMMIT_REF_NAME == "main"'
-      changes:
-        - backend/prisma/schema.prisma
-  timeout: 8 minutes
+  timeout: 3 minutes
 
 validate_frontend:
   stage: validate_test
@@ -147,9 +136,7 @@ validate_frontend:
     - Write-Host "✅ Frontend validated successfully"
   rules:
     - if: '$CI_COMMIT_REF_NAME == "dev" || $CI_COMMIT_REF_NAME == "main"'
-      changes:
-        - client/**
-  timeout: 10 minutes
+  timeout: 8 minutes
 
 validate_backend:
   stage: validate_test
@@ -161,9 +148,7 @@ validate_backend:
     - Write-Host "✅ Backend validated successfully"
   rules:
     - if: '$CI_COMMIT_REF_NAME == "dev" || $CI_COMMIT_REF_NAME == "main"'
-      changes:
-        - backend/**
-  timeout: 10 minutes
+  timeout: 6 minutes
 
 test_frontend:
   stage: validate_test
@@ -183,10 +168,8 @@ test_frontend:
       }
   rules:
     - if: '$CI_COMMIT_REF_NAME == "dev" || $CI_COMMIT_REF_NAME == "main"'
-      changes:
-        - client/**
   allow_failure: true
-  timeout: 10 minutes
+  timeout: 8 minutes
 
 test_backend:
   stage: validate_test
@@ -206,10 +189,8 @@ test_backend:
       }
   rules:
     - if: '$CI_COMMIT_REF_NAME == "dev" || $CI_COMMIT_REF_NAME == "main"'
-      changes:
-        - backend/**
   allow_failure: true
-  timeout: 10 minutes
+  timeout: 8 minutes
 
 build_frontend_image:
   stage: build
@@ -218,18 +199,15 @@ build_frontend_image:
     - Write-Host "🏗️ Building Frontend image..."
     - docker build -t $FRONTEND_IMAGE:$COMMIT_TAG ./client
     - |
-      if [[ "$CI_COMMIT_REF_NAME" == "main" || "$CI_COMMIT_TAG" ]]; then
-        Write-Host "🚀 Pushing Frontend image..."
+      if [[ "$CI_COMMIT_REF_NAME" == "main" ]]; then
+        Write-Host "🚀 Pushing Frontend image to Docker Hub..."
         docker push $FRONTEND_IMAGE:$COMMIT_TAG
       else
-        Write-Host "⏭️ Push skipped (branch: $CI_COMMIT_REF_NAME)"
+        Write-Host "⏭️ Push skipped (dev branch - pre-production)"
       fi
     - Write-Host "✅ Frontend image built"
   rules:
     - if: '$CI_COMMIT_REF_NAME == "dev" || $CI_COMMIT_REF_NAME == "main"'
-      changes:
-        - client/**
-        - client/Dockerfile*
   timeout: 15 minutes
 
 build_backend_image:
@@ -239,18 +217,15 @@ build_backend_image:
     - Write-Host "🏗️ Building Backend image..."
     - docker build -t $BACKEND_IMAGE:$COMMIT_TAG ./backend
     - |
-      if [[ "$CI_COMMIT_REF_NAME" == "main" || "$CI_COMMIT_TAG" ]]; then
-        Write-Host "🚀 Pushing Backend image..."
+      if [[ "$CI_COMMIT_REF_NAME" == "main" ]]; then
+        Write-Host "🚀 Pushing Backend image to Docker Hub..."
         docker push $BACKEND_IMAGE:$COMMIT_TAG
       else
-        Write-Host "⏭️ Push skipped (branch: $CI_COMMIT_REF_NAME)"
+        Write-Host "⏭️ Push skipped (dev branch - pre-production)"
       fi
     - Write-Host "✅ Backend image built"
   rules:
     - if: '$CI_COMMIT_REF_NAME == "dev" || $CI_COMMIT_REF_NAME == "main"'
-      changes:
-        - backend/**
-        - backend/Dockerfile*
   timeout: 15 minutes
 
 build_db_image:
@@ -260,18 +235,15 @@ build_db_image:
     - Write-Host "🏗️ Building Database image..."
     - docker build -t $DB_IMAGE:$COMMIT_TAG ./db
     - |
-      if [[ "$CI_COMMIT_REF_NAME" == "main" || "$CI_COMMIT_TAG" ]]; then
-        Write-Host "🚀 Pushing Database image..."
+      if [[ "$CI_COMMIT_REF_NAME" == "main" ]]; then
+        Write-Host "🚀 Pushing Database image to Docker Hub..."
         docker push $DB_IMAGE:$COMMIT_TAG
       else
-        Write-Host "⏭️ Push skipped (branch: $CI_COMMIT_REF_NAME)"
+        Write-Host "⏭️ Push skipped (dev branch - pre-production)"
       fi
     - Write-Host "✅ Database image built"
   rules:
     - if: '$CI_COMMIT_REF_NAME == "dev" || $CI_COMMIT_REF_NAME == "main"'
-      changes:
-        - db/**
-        - db/Dockerfile*
   timeout: 10 minutes
 
 deploy_staging:
@@ -283,14 +255,14 @@ deploy_staging:
   before_script:
     - apk add --no-cache openssh-client
   script:
-    - Write-Host "🚀 Deploying to staging..."
+    - Write-Host "🚀 AUTO Deploying to pre-production..."
     - |
       ssh -o StrictHostKeyChecking=no $STAGING_DEPLOY_USER@$STAGING_DEPLOY_SERVER "
         cd $STAGING_DEPLOY_PATH &&
         docker-compose pull --quiet &&
         docker-compose up -d --no-build &&
-        echo '✅ Staging deployed successfully'"
-    - Write-Host "✅ Staging deployment completed"
+        echo '✅ Pre-production deployed successfully'"
+    - Write-Host "✅ Pre-production deployment completed"
   rules:
     - if: '$CI_COMMIT_REF_NAME == "dev"'
   tags:
@@ -307,7 +279,7 @@ deploy_production:
   before_script:
     - apk add --no-cache openssh-client curl
   script:
-    - Write-Host "🚀 Deploying to production..."
+    - Write-Host "🚀 MANUAL Deploying to production..."
     - |
       ssh -o StrictHostKeyChecking=no $DEPLOY_USER@$DEPLOY_SERVER "
         cd $DEPLOY_PATH &&
@@ -349,4 +321,3 @@ workflow:
     - if: '$CI_COMMIT_BRANCH == "main"'
     - if: '$CI_COMMIT_BRANCH == "dev"'
     - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
-    - if: '$CI_COMMIT_TAG'
