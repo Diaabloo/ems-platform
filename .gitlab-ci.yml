@@ -173,7 +173,8 @@ database_schema_check:
     - Write-Host "🗄️ Database schema validation (Prisma only)..."
     - cd backend
     - npx prisma validate
-    - npx prisma db push --preview-feature --skip-generate
+    # REMPLACER cette ligne problématique :
+    - npx prisma db push --skip-generate
     - Write-Host "✅ Database schema validated"
   rules:
     - if: '$CI_COMMIT_REF_NAME == "dev" || $CI_COMMIT_REF_NAME == "main"'
