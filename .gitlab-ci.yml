@@ -1,38 +1,56 @@
-# .gitlab-ci.yml - VERSION OPTIMISÉE
-# Applique toutes vos recommandations
+# .gitlab-ci.yml - VERSION PROFESSIONNELLE PERN STACK
+# Optimisé pour Windows + Docker-in-Docker avec migration Linux facile
+
+# =============================================
+# CONFIGURATION GLOBALE
+# =============================================
 
 stages:
-  - dependencies
-  - security
-  - validate_test
-  - build
-  - deploy
+  - dependencies    # Installation des dépendances
+  - security        # Audit sécurité et validation
+  - validate_test   # Validation et tests
+  - build           # Construction des images Docker
+  - deploy          # Déploiement
+  - clean           # Nettoyage
 
 variables:
+  # Configuration Docker
   DOCKER_TLS_CERTDIR: ""
+  DOCKER_BUILDKIT: "1"  # BuildKit pour meilleures performances
+
+  # Versions
   NODE_VERSION: "20"
   POSTGRES_VERSION: "15"
+
+  # Optimisations
   NEXT_TELEMETRY_DISABLED: "1"
+  NPM_CONFIG_PREFER_OFFLINE: "true"
+  NPM_CONFIG_AUDIT: "false"
+
+  # Noms des images Docker
   FRONTEND_IMAGE: "amineelalami/ems-platform-frontend"
   BACKEND_IMAGE: "amineelalami/ems-platform-backend"
   DB_IMAGE: "amineelalami/ems-platform-db"
   COMMIT_TAG: "sha-${CI_COMMIT_SHORT_SHA}"
-  DOCKER_BUILDKIT: "1"  # BuildKit pour meilleures performances
 
 # =============================================
-# Cache Configuration - OPTIMISÉ
+# CACHE CONFIGURATION - NE JAMAIS SUPPRIMER node_modules
 # =============================================
 
 cache:
   key: "npm-${CI_COMMIT_REF_SLUG}"
   paths:
-    - client/node_modules/
+    - frontend/node_modules/
     - backend/node_modules/
   policy: pull-push
   untracked: false
   when: on_success
 
-.docker_build_template: &docker_build_template
+# =============================================
+# TEMPLATES RÉUTILISABLES
+# =============================================
+
+.docker_template: &docker_template
   image: docker:24
   services:
     - docker:24-dind
@@ -45,119 +63,127 @@ cache:
   tags:
     - windows
     - local
-  timeout: 15 minutes
+  # Note migration Linux: remplacer tags par -> tags: [docker, linux]
 
 .node_template: &node_template
   image: node:${NODE_VERSION}
-  variables:
-    NPM_CONFIG_PREFER_OFFLINE: "true"
-    NPM_CONFIG_AUDIT: "false"
   before_script:
     - node --version
     - npm --version
   tags:
     - windows
     - local
-  timeout: 10 minutes
+  # Note migration Linux: remplacer tags par -> tags: [docker, linux]
 
 # =============================================
-# DEPENDENCIES STAGE - OPTIMISÉ
+# STAGE DEPENDENCIES - Installation séparée par service
 # =============================================
 
-install_all_deps:
+install_frontend_deps:
   stage: dependencies
   <<: *node_template
-  timeout: 15 minutes  # Réduit car on ne supprime plus node_modules
   script:
-    - Write-Host "📦 Installing dependencies (optimized cache strategy)..."
-
-    # Installation frontend avec cache
-    - cd client
-    - Write-Host "📦 Installing frontend dependencies..."
+    - Write-Host "📦 Installation des dépendances Frontend..."
+    - cd frontend
     - npm install --prefer-offline --no-audit
-    - Write-Host "✅ Frontend dependencies installed"
-    - cd ..
-
-    # Installation backend avec cache
-    - cd backend
-    - Write-Host "📦 Installing backend dependencies..."
-    - npm install --prefer-offline --no-audit
-    - npx prisma generate --no-hints
-    - Write-Host "✅ Backend dependencies installed"
-    - cd ..
-
-    - Write-Host "🎉 All dependencies installed with cache optimization"
+    - Write-Host "✅ Dépendances Frontend installées"
   cache:
     key: "npm-${CI_COMMIT_REF_SLUG}"
     paths:
-      - client/node_modules/
+      - frontend/node_modules/
+    policy: pull-push
+  rules:
+    - changes:
+        - frontend/package.json
+        - frontend/package-lock.json
+    - if: '$CI_COMMIT_REF_NAME == "main"'
+  timeout: 10 minutes
+
+install_backend_deps:
+  stage: dependencies
+  <<: *node_template
+  script:
+    - Write-Host "📦 Installation des dépendances Backend..."
+    - cd backend
+    - npm install --prefer-offline --no-audit
+    - npx prisma generate --no-hints
+    - Write-Host "✅ Dépendances Backend installées"
+  cache:
+    key: "npm-${CI_COMMIT_REF_SLUG}"
+    paths:
       - backend/node_modules/
     policy: pull-push
   rules:
-    - if: '$CI_COMMIT_REF_NAME == "dev" || $CI_COMMIT_REF_NAME == "main"'
+    - changes:
+        - backend/package.json
+        - backend/package-lock.json
+        - backend/prisma/schema.prisma
+    - if: '$CI_COMMIT_REF_NAME == "main"'
+  timeout: 10 minutes
 
 # =============================================
-# SECURITY STAGE
+# STAGE SECURITY - Audit et validation
 # =============================================
 
-security_scan:
+audit_frontend:
   stage: security
-  image: node:${NODE_VERSION}
+  <<: *node_template
   script:
-    - Write-Host "🔒 Security scan..."
-    - |
-      if (Test-Path "client/package.json") {
-        cd client
-        npm audit --audit-level high --production
-        cd ..
-      }
-    - |
-      if (Test-Path "backend/package.json") {
-        cd backend
-        npm audit --audit-level high --production
-        cd ..
-      }
-    - Write-Host "✅ Security scan completed"
+    - Write-Host "🔒 Audit de sécurité Frontend..."
+    - cd frontend
+    - npm audit --audit-level high --production
+    - Write-Host "✅ Audit Frontend complété"
   rules:
-    - if: '$CI_COMMIT_REF_NAME == "dev" || $CI_COMMIT_REF_NAME == "main"'
+    - changes:
+        - frontend/package.json
+    - if: '$CI_COMMIT_REF_NAME == "main"'
   allow_failure: true
-  tags:
-    - windows
-    - local
   timeout: 5 minutes
 
-database_schema_check:
+audit_backend:
   stage: security
-  image: node:${NODE_VERSION}
+  <<: *node_template
   script:
-    - Write-Host "🗄️ Database schema validation..."
+    - Write-Host "🔒 Audit de sécurité Backend..."
+    - cd backend
+    - npm audit --audit-level high --production
+    - Write-Host "✅ Audit Backend complété"
+  rules:
+    - changes:
+        - backend/package.json
+    - if: '$CI_COMMIT_REF_NAME == "main"'
+  allow_failure: true
+  timeout: 5 minutes
+
+validate_prisma_schema:
+  stage: security
+  <<: *node_template
+  script:
+    - Write-Host "🗄️ Validation du schéma Prisma..."
     - cd backend
     - npx prisma validate
-    - npx prisma generate
-    - Write-Host "✅ Database schema validated"
+    - Write-Host "✅ Schéma Prisma validé"
   rules:
-    - if: '$CI_COMMIT_REF_NAME == "dev" || $CI_COMMIT_REF_NAME == "main"'
-  tags:
-    - windows
-    - local
-  timeout: 5 minutes
+    - changes:
+        - backend/prisma/schema.prisma
+    - if: '$CI_COMMIT_REF_NAME == "main"'
+  timeout: 3 minutes
 
 # =============================================
-# VALIDATE + TEST STAGE - OPTIMISÉ
+# STAGE VALIDATE_TEST - Validation et tests parallèles
 # =============================================
 
 validate_frontend:
   stage: validate_test
   <<: *node_template
   script:
-    - Write-Host "🔍 Validating frontend..."
-    - cd client
+    - Write-Host "🔍 Validation du build Frontend..."
+    - cd frontend
     - npm run build
-    - Write-Host "✅ Frontend validated"
+    - Write-Host "✅ Frontend validé avec succès"
   rules:
-    - changes:  # ✅ Ne s'exécute que si frontend change
-      - client/**/*
-      - client/*
+    - changes:
+        - frontend/**
     - if: '$CI_COMMIT_REF_NAME == "main"'
   timeout: 8 minutes
 
@@ -165,101 +191,167 @@ validate_backend:
   stage: validate_test
   <<: *node_template
   script:
-    - Write-Host "🔍 Validating backend..."
+    - Write-Host "🔍 Validation du build Backend..."
     - cd backend
-    - |
-      $buildScript = npm run | Select-String "build"
-      if ($buildScript) {
-        npm run build --silent
-      }
-    - Write-Host "✅ Backend validated"
+    - npm run build
+    - Write-Host "✅ Backend validé avec succès"
   rules:
-    - changes:  # ✅ Ne s'exécute que si backend change
-      - backend/**/*
-      - backend/*
+    - changes:
+        - backend/**
     - if: '$CI_COMMIT_REF_NAME == "main"'
   timeout: 6 minutes
 
-run_all_tests:
+test_frontend:
   stage: validate_test
   <<: *node_template
   script:
-    - Write-Host "🧪 Running tests..."
-
-    # Frontend tests conditionnels
-    - cd client
+    - Write-Host "🧪 Exécution des tests Frontend..."
+    - cd frontend
     - |
-      $testScript = npm run | Select-String "test"
-      if ($testScript) {
-        npm test -- --watchAll=false --passWithNoTests --silent
-      } else {
-        Write-Host "⚠️ No test script found in frontend"
+      # Exécution conditionnelle des tests
+      if (Test-Path "package.json") {
+        $testScript = npm run | Select-String "test"
+        if ($testScript) {
+          npm test -- --watchAll=false --passWithNoTests --silent
+          Write-Host "✅ Tests Frontend complétés"
+        } else {
+          Write-Host "⚠️ Aucun script de test trouvé dans Frontend"
+        }
       }
-    - cd ..
+  rules:
+    - changes:
+        - frontend/**
+    - if: '$CI_COMMIT_REF_NAME == "main"'
+  allow_failure: true
+  timeout: 8 minutes
 
-    # Backend tests conditionnels
+test_backend:
+  stage: validate_test
+  <<: *node_template
+  script:
+    - Write-Host "🧪 Exécution des tests Backend..."
     - cd backend
     - |
-      $hasJest = (Test-Path "jest.config.js") -or (Test-Path "jest.config.cjs") -or (Test-Path "jest.config.ts")
-      if ($hasJest) {
-        npm run test -- --silent --passWithNoTests
-      } else {
-        Write-Host "⚠️ No Jest configuration found in backend"
+      # Exécution conditionnelle des tests
+      if (Test-Path "package.json") {
+        $hasJest = (Test-Path "jest.config.js") -or (Test-Path "jest.config.cjs") -or (Test-Path "jest.config.ts")
+        if ($hasJest) {
+          npm run test -- --silent --passWithNoTests
+          Write-Host "✅ Tests Backend complétés"
+        } else {
+          Write-Host "⚠️ Aucune configuration Jest trouvée dans Backend"
+        }
       }
-    - cd ..
-
-    - Write-Host "✅ All tests completed"
   rules:
-    - if: '$CI_COMMIT_REF_NAME == "dev" || $CI_COMMIT_REF_NAME == "main"'
+    - changes:
+        - backend/**
+    - if: '$CI_COMMIT_REF_NAME == "main"'
   allow_failure: true
   timeout: 8 minutes
 
 # =============================================
-# BUILD STAGE - OPTIMISÉ (Build unique + cache Docker)
+# STAGE BUILD - Construction des images Docker
 # =============================================
 
-build_all_images:
-  <<: *docker_build_template
+build_frontend_image:
   stage: build
+  <<: *docker_template
   script:
-    - Write-Host "🏗️ Building all Docker images with BuildKit..."
-
-    # Build Frontend
-    - Write-Host "📱 Building frontend image..."
-    - docker build -t $FRONTEND_IMAGE:$COMMIT_TAG ./client
-
-    # Build Backend
-    - Write-Host "⚙️ Building backend image..."
-    - docker build -t $BACKEND_IMAGE:$COMMIT_TAG ./backend
-
-    # Build Database
-    - Write-Host "🗄️ Building database image..."
-    - docker build -t $DB_IMAGE:$COMMIT_TAG ./db
-
-    # Push UNIQUEMENT sur main
+    - Write-Host "🏗️ Construction de l'image Frontend..."
+    - docker build -t $FRONTEND_IMAGE:$COMMIT_TAG ./frontend
     - |
-      if [[ "$CI_COMMIT_REF_NAME" == "main" ]]; then
-        Write-Host "🚀 Pushing images to Docker Hub (main branch only)..."
+      # Push conditionnel - UNIQUEMENT sur main ou tags
+      if [[ "$CI_COMMIT_REF_NAME" == "main" || "$CI_COMMIT_TAG" ]]; then
+        Write-Host "🚀 Push de l'image Frontend..."
         docker push $FRONTEND_IMAGE:$COMMIT_TAG
-        docker push $BACKEND_IMAGE:$COMMIT_TAG
-        docker push $DB_IMAGE:$COMMIT_TAG
       else
-        Write-Host "⏭️ Skipping Docker push (not main branch)"
+        Write-Host "⏭️ Push ignoré (branche: $CI_COMMIT_REF_NAME)"
       }
-
-    - Write-Host "✅ All images built successfully"
+    - Write-Host "✅ Image Frontend construite"
   rules:
-    - changes:  # ✅ Build seulement si code change
-      - client/**/*
-      - backend/**/*
-      - db/**/*
-      - Dockerfile*
-      - .gitlab-ci.yml
+    - changes:
+        - frontend/**
+        - frontend/Dockerfile*
     - if: '$CI_COMMIT_REF_NAME == "main"'
-  timeout: 20 minutes
+  timeout: 15 minutes
+
+build_backend_image:
+  stage: build
+  <<: *docker_template
+  script:
+    - Write-Host "🏗️ Construction de l'image Backend..."
+    - docker build -t $BACKEND_IMAGE:$COMMIT_TAG ./backend
+    - |
+      # Push conditionnel - UNIQUEMENT sur main ou tags
+      if [[ "$CI_COMMIT_REF_NAME" == "main" || "$CI_COMMIT_TAG" ]]; then
+        Write-Host "🚀 Push de l'image Backend..."
+        docker push $BACKEND_IMAGE:$COMMIT_TAG
+      else {
+        Write-Host "⏭️ Push ignoré (branche: $CI_COMMIT_REF_NAME)"
+      }
+    - Write-Host "✅ Image Backend construite"
+  rules:
+    - changes:
+        - backend/**
+        - backend/Dockerfile*
+    - if: '$CI_COMMIT_REF_NAME == "main"'
+  timeout: 15 minutes
+
+build_db_image:
+  stage: build
+  <<: *docker_template
+  script:
+    - Write-Host "🏗️ Construction de l'image Database..."
+    - docker build -t $DB_IMAGE:$COMMIT_TAG ./db
+    - |
+      # Push conditionnel - UNIQUEMENT sur main ou tags
+      if [[ "$CI_COMMIT_REF_NAME" == "main" || "$CI_COMMIT_TAG" ]]; then
+        Write-Host "🚀 Push de l'image Database..."
+        docker push $DB_IMAGE:$COMMIT_TAG
+      else {
+        Write-Host "⏭️ Push ignoré (branche: $CI_COMMIT_REF_NAME)"
+      }
+    - Write-Host "✅ Image Database construite"
+  rules:
+    - changes:
+        - db/**
+        - db/Dockerfile*
+    - if: '$CI_COMMIT_REF_NAME == "main"'
+  timeout: 10 minutes
 
 # =============================================
-# DEPLOY STAGE - OPTIMISÉ
+# OPTION: Build unique des 3 images (décommenter si préféré)
+# =============================================
+
+# build_all_images:
+#   stage: build
+#   <<: *docker_template
+#   script:
+#     - Write-Host "🏗️ Construction groupée des images..."
+#     - docker build -t $FRONTEND_IMAGE:$COMMIT_TAG ./frontend
+#     - docker build -t $BACKEND_IMAGE:$COMMIT_TAG ./backend
+#     - docker build -t $DB_IMAGE:$COMMIT_TAG ./db
+#     - |
+#       if [[ "$CI_COMMIT_REF_NAME" == "main" || "$CI_COMMIT_TAG" ]]; then
+#         Write-Host "🚀 Push groupé des images..."
+#         docker push $FRONTEND_IMAGE:$COMMIT_TAG
+#         docker push $BACKEND_IMAGE:$COMMIT_TAG
+#         docker push $DB_IMAGE:$COMMIT_TAG
+#       fi
+#     - Write-Host "✅ Toutes les images construites"
+#   rules:
+#     - changes:
+#         - frontend/**
+#         - backend/**
+#         - db/**
+#         - Dockerfile*
+#     - if: '$CI_COMMIT_REF_NAME == "main"'
+#   timeout: 25 minutes
+#   # AVANTAGE: Plus simple, moins de jobs
+#   # INCONVÉNIENT: Moins visible dans l'UI, rebuild tout même si un seul service change
+
+# =============================================
+# STAGE DEPLOY - Déploiement
 # =============================================
 
 deploy_staging:
@@ -271,14 +363,14 @@ deploy_staging:
   before_script:
     - apk add --no-cache openssh-client
   script:
-    - Write-Host "🚀 Deploying to staging..."
+    - Write-Host "🚀 Déploiement en staging..."
     - |
       ssh -o StrictHostKeyChecking=no $STAGING_DEPLOY_USER@$STAGING_DEPLOY_SERVER "
         cd $STAGING_DEPLOY_PATH &&
         docker-compose pull --quiet &&
-        docker-compose up -d --no-build frontend backend &&
-        echo '✅ Staging deployment completed'"
-    - Write-Host "✅ Staging deployed"
+        docker-compose up -d --no-build &&
+        echo '✅ Staging déployé avec succès'"
+    - Write-Host "✅ Déploiement staging terminé"
   rules:
     - if: '$CI_COMMIT_REF_NAME == "dev"'
   tags:
@@ -295,17 +387,17 @@ deploy_production:
   before_script:
     - apk add --no-cache openssh-client curl
   script:
-    - Write-Host "🚀 Deploying to production..."
+    - Write-Host "🚀 Déploiement en production..."
     - |
       ssh -o StrictHostKeyChecking=no $DEPLOY_USER@$DEPLOY_SERVER "
         cd $DEPLOY_PATH &&
         docker-compose pull --quiet &&
         docker-compose up -d --no-build &&
-        echo '✅ Production deployment completed'"
-    - Write-Host "🔄 Health check..."
+        echo '✅ Production déployée avec succès'"
+    - Write-Host "🔄 Vérification de santé..."
     - sleep 10
     - curl -f https://ems-platform.com/api/health || exit 1
-    - Write-Host "✅ Production deployed"
+    - Write-Host "✅ Déploiement production terminé"
   rules:
     - if: '$CI_COMMIT_REF_NAME == "main"'
       when: manual
@@ -314,9 +406,47 @@ deploy_production:
     - local
   timeout: 15 minutes
 
+# =============================================
+# STAGE CLEAN - Nettoyage léger
+# =============================================
+
+cleanup_docker:
+  stage: clean
+  image: docker:24
+  services:
+    - docker:24-dind
+  variables:
+    DOCKER_TLS_CERTDIR: ""
+  script:
+    - Write-Host "🧹 Nettoyage Docker..."
+    - docker system prune -f
+    - Write-Host "✅ Nettoyage terminé"
+  tags:
+    - windows
+    - local
+  when: always
+  allow_failure: true
+  timeout: 5 minutes
+
+# =============================================
+# CONFIGURATION WORKFLOW
+# =============================================
+
 workflow:
   rules:
     - if: '$CI_COMMIT_BRANCH == "main"'
     - if: '$CI_COMMIT_BRANCH == "dev"'
     - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
     - if: '$CI_COMMIT_TAG'
+
+# =============================================
+# NOTES MIGRATION LINUX
+# =============================================
+
+# Pour migrer vers un runner Linux:
+# 1. Changer les tags: [windows, local] -> [docker, linux]
+# 2. Option Docker socket (plus rapide que dind):
+#    - Supprimer le service docker:24-dind
+#    - Ajouter: /var/run/docker.sock:/var/run/docker.sock
+#    - Variables: DOCKER_HOST: unix:///var/run/docker.sock
+# 3. Adapter les commandes PowerShell vers shell
