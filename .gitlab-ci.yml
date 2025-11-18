@@ -1,3 +1,5 @@
+# .gitlab-ci.yml - VERSION CORRECTE POUR WINDOWS/POWERSHELL
+
 stages:
   - dependencies
   - security
@@ -20,21 +22,16 @@ variables:
   COMMIT_TAG: "sha-${CI_COMMIT_SHORT_SHA}"
 
 # =============================================
-# CACHE INTELLIGENT - SOLUTION FIX
+# CACHE SIMPLIFIÉ - POUR WINDOWS
 # =============================================
 
 cache:
-  key:
-    files:
-      - client/package-lock.json
-      - backend/package-lock.json
-    prefix: "npm-${CI_COMMIT_REF_SLUG}"
+  key: "npm-${CI_COMMIT_REF_SLUG}"
   paths:
     - client/node_modules/
     - backend/node_modules/
   policy: pull-push
   untracked: false
-  when: on_success
 
 .docker_template: &docker_template
   image: docker:24
@@ -60,7 +57,7 @@ cache:
     - local
 
 # =============================================
-# DEPENDENCIES - AVEC VERIFICATION CACHE
+# DEPENDENCIES - SYNTAXE POWERSHELL CORRECTE
 # =============================================
 
 install_frontend_deps:
@@ -69,21 +66,21 @@ install_frontend_deps:
   script:
     - Write-Host "📦 Installing Frontend dependencies..."
     - cd client
+    - Write-Host "🔍 Checking for existing node_modules..."
     - |
-      # Vérification intelligente du cache
-      if [ -d "node_modules" ] && [ -f "package-lock.json" ]; then
-        Write-Host "🔄 Cache found, checking for updates..."
-        # Utilise npm ci pour une installation fiable avec cache
-        npm ci --prefer-offline --no-audit --silent
+      # Syntaxe PowerShell correcte pour Windows
+      if (Test-Path "node_modules") {
+        Write-Host "🔄 node_modules found, using cache..."
+        npm install --prefer-offline --no-audit
         Write-Host "✅ Frontend dependencies updated from cache"
-      else
+      } else {
         Write-Host "📥 Full installation (no cache found)..."
         npm install --prefer-offline --no-audit
         Write-Host "✅ Frontend dependencies installed"
-      fi
+      }
   rules:
     - if: '$CI_COMMIT_REF_NAME == "dev" || $CI_COMMIT_REF_NAME == "main"'
-  timeout: 15 minutes
+  timeout: 10 minutes
 
 install_backend_deps:
   stage: dependencies
@@ -91,24 +88,26 @@ install_backend_deps:
   script:
     - Write-Host "📦 Installing Backend dependencies..."
     - cd backend
+    - Write-Host "🔍 Checking for existing node_modules..."
     - |
-      # Vérification intelligente du cache
-      if [ -d "node_modules" ] && [ -f "package-lock.json" ]; then
-        Write-Host "🔄 Cache found, checking for updates..."
-        npm ci --prefer-offline --no-audit --silent
+      # Syntaxe PowerShell correcte pour Windows
+      if (Test-Path "node_modules") {
+        Write-Host "🔄 node_modules found, using cache..."
+        npm install --prefer-offline --no-audit
         Write-Host "✅ Backend dependencies updated from cache"
-      else
+      } else {
         Write-Host "📥 Full installation (no cache found)..."
         npm install --prefer-offline --no-audit
         Write-Host "✅ Backend dependencies installed"
-      fi
+      }
+    - Write-Host "🗄️ Generating Prisma client..."
     - npx prisma generate --no-hints
   rules:
     - if: '$CI_COMMIT_REF_NAME == "dev" || $CI_COMMIT_REF_NAME == "main"'
-  timeout: 15 minutes
+  timeout: 10 minutes
 
 # =============================================
-# AUTRES JOBS (inchangés)
+# SECURITY STAGE
 # =============================================
 
 audit_frontend:
@@ -122,7 +121,7 @@ audit_frontend:
   rules:
     - if: '$CI_COMMIT_REF_NAME == "dev" || $CI_COMMIT_REF_NAME == "main"'
   allow_failure: true
-  timeout: 15 minutes
+  timeout: 10 minutes
 
 audit_backend:
   stage: security
@@ -135,7 +134,7 @@ audit_backend:
   rules:
     - if: '$CI_COMMIT_REF_NAME == "dev" || $CI_COMMIT_REF_NAME == "main"'
   allow_failure: true
-  timeout: 15 minutes
+  timeout: 10 minutes
 
 validate_prisma_schema:
   stage: security
@@ -147,7 +146,11 @@ validate_prisma_schema:
     - Write-Host "✅ Prisma schema validated"
   rules:
     - if: '$CI_COMMIT_REF_NAME == "dev" || $CI_COMMIT_REF_NAME == "main"'
-  timeout: 18 minutes
+  timeout: 10 minutes
+
+# =============================================
+# VALIDATE_TEST STAGE
+# =============================================
 
 validate_frontend:
   stage: validate_test
@@ -159,7 +162,7 @@ validate_frontend:
     - Write-Host "✅ Frontend validated successfully"
   rules:
     - if: '$CI_COMMIT_REF_NAME == "dev" || $CI_COMMIT_REF_NAME == "main"'
-  timeout: 18 minutes
+  timeout: 10 minutes
 
 validate_backend:
   stage: validate_test
@@ -171,7 +174,7 @@ validate_backend:
     - Write-Host "✅ Backend validated successfully"
   rules:
     - if: '$CI_COMMIT_REF_NAME == "dev" || $CI_COMMIT_REF_NAME == "main"'
-  timeout: 16 minutes
+  timeout: 10 minutes
 
 test_frontend:
   stage: validate_test
@@ -192,7 +195,7 @@ test_frontend:
   rules:
     - if: '$CI_COMMIT_REF_NAME == "dev" || $CI_COMMIT_REF_NAME == "main"'
   allow_failure: true
-  timeout: 18 minutes
+  timeout: 10 minutes
 
 test_backend:
   stage: validate_test
@@ -213,7 +216,11 @@ test_backend:
   rules:
     - if: '$CI_COMMIT_REF_NAME == "dev" || $CI_COMMIT_REF_NAME == "main"'
   allow_failure: true
-  timeout: 18 minutes
+  timeout: 10 minutes
+
+# =============================================
+# BUILD STAGE
+# =============================================
 
 build_frontend_image:
   stage: build
@@ -269,6 +276,10 @@ build_db_image:
     - if: '$CI_COMMIT_REF_NAME == "dev" || $CI_COMMIT_REF_NAME == "main"'
   timeout: 10 minutes
 
+# =============================================
+# DEPLOY STAGE
+# =============================================
+
 deploy_staging:
   stage: deploy
   image: alpine:latest
@@ -320,6 +331,10 @@ deploy_production:
     - windows
     - local
   timeout: 15 minutes
+
+# =============================================
+# CLEAN STAGE
+# =============================================
 
 cleanup_docker:
   stage: clean
