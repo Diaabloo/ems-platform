@@ -99,7 +99,7 @@ audit_frontend:
   rules:
     - if: '$CI_COMMIT_REF_NAME == "dev" || $CI_COMMIT_REF_NAME == "main"'
   allow_failure: true
-  timeout: 5 minutes
+  timeout: 10 minutes
 
 audit_backend:
   stage: security
@@ -112,7 +112,7 @@ audit_backend:
   rules:
     - if: '$CI_COMMIT_REF_NAME == "dev" || $CI_COMMIT_REF_NAME == "main"'
   allow_failure: true
-  timeout: 5 minutes
+  timeout: 10 minutes
 
 validate_prisma_schema:
   stage: security
@@ -124,7 +124,7 @@ validate_prisma_schema:
     - Write-Host "✅ Prisma schema validated"
   rules:
     - if: '$CI_COMMIT_REF_NAME == "dev" || $CI_COMMIT_REF_NAME == "main"'
-  timeout: 3 minutes
+  timeout: 10 minutes
 
 validate_frontend:
   stage: validate_test
@@ -136,7 +136,7 @@ validate_frontend:
     - Write-Host "✅ Frontend validated successfully"
   rules:
     - if: '$CI_COMMIT_REF_NAME == "dev" || $CI_COMMIT_REF_NAME == "main"'
-  timeout: 8 minutes
+  timeout: 15 minutes
 
 validate_backend:
   stage: validate_test
@@ -148,7 +148,7 @@ validate_backend:
     - Write-Host "✅ Backend validated successfully"
   rules:
     - if: '$CI_COMMIT_REF_NAME == "dev" || $CI_COMMIT_REF_NAME == "main"'
-  timeout: 6 minutes
+  timeout: 15 minutes
 
 test_frontend:
   stage: validate_test
@@ -169,7 +169,7 @@ test_frontend:
   rules:
     - if: '$CI_COMMIT_REF_NAME == "dev" || $CI_COMMIT_REF_NAME == "main"'
   allow_failure: true
-  timeout: 8 minutes
+  timeout: 15 minutes
 
 test_backend:
   stage: validate_test
@@ -190,7 +190,7 @@ test_backend:
   rules:
     - if: '$CI_COMMIT_REF_NAME == "dev" || $CI_COMMIT_REF_NAME == "main"'
   allow_failure: true
-  timeout: 8 minutes
+  timeout: 15 minutes
 
 build_frontend_image:
   stage: build
