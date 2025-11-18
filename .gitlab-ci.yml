@@ -1,4 +1,4 @@
-# .gitlab-ci.yml - VERSION CORRECTE POUR WINDOWS/POWERSHELL
+# .gitlab-ci.yml - VERSION AVEC CACHE SÉPARÉ
 
 stages:
   - dependencies
@@ -22,16 +22,8 @@ variables:
   COMMIT_TAG: "sha-${CI_COMMIT_SHORT_SHA}"
 
 # =============================================
-# CACHE SIMPLIFIÉ - POUR WINDOWS
+# SUPPRIMER LE CACHE GLOBAL - UTILISER CACHE PAR JOB
 # =============================================
-
-cache:
-  key: "npm-${CI_COMMIT_REF_SLUG}"
-  paths:
-    - client/node_modules/
-    - backend/node_modules/
-  policy: pull-push
-  untracked: false
 
 .docker_template: &docker_template
   image: docker:24
@@ -57,7 +49,7 @@ cache:
     - local
 
 # =============================================
-# DEPENDENCIES - SYNTAXE POWERSHELL CORRECTE
+# DEPENDENCIES - CACHE SÉPARÉ POUR CHAQUE SERVICE
 # =============================================
 
 install_frontend_deps:
@@ -68,7 +60,6 @@ install_frontend_deps:
     - cd client
     - Write-Host "🔍 Checking for existing node_modules..."
     - |
-      # Syntaxe PowerShell correcte pour Windows
       if (Test-Path "node_modules") {
         Write-Host "🔄 node_modules found, using cache..."
         npm install --prefer-offline --no-audit
@@ -78,6 +69,11 @@ install_frontend_deps:
         npm install --prefer-offline --no-audit
         Write-Host "✅ Frontend dependencies installed"
       }
+  cache:  # CACHE UNIQUEMENT POUR FRONTEND
+    key: "frontend-npm-${CI_COMMIT_REF_SLUG}"
+    paths:
+      - client/node_modules/
+    policy: pull-push
   rules:
     - if: '$CI_COMMIT_REF_NAME == "dev" || $CI_COMMIT_REF_NAME == "main"'
   timeout: 10 minutes
@@ -90,7 +86,6 @@ install_backend_deps:
     - cd backend
     - Write-Host "🔍 Checking for existing node_modules..."
     - |
-      # Syntaxe PowerShell correcte pour Windows
       if (Test-Path "node_modules") {
         Write-Host "🔄 node_modules found, using cache..."
         npm install --prefer-offline --no-audit
@@ -102,12 +97,17 @@ install_backend_deps:
       }
     - Write-Host "🗄️ Generating Prisma client..."
     - npx prisma generate --no-hints
+  cache:  # CACHE UNIQUEMENT POUR BACKEND
+    key: "backend-npm-${CI_COMMIT_REF_SLUG}"
+    paths:
+      - backend/node_modules/
+    policy: pull-push
   rules:
     - if: '$CI_COMMIT_REF_NAME == "dev" || $CI_COMMIT_REF_NAME == "main"'
   timeout: 10 minutes
 
 # =============================================
-# SECURITY STAGE
+# AUTRES JOBS - AVEC CACHE PULL SEULEMENT
 # =============================================
 
 audit_frontend:
@@ -118,6 +118,11 @@ audit_frontend:
     - cd client
     - npm audit --audit-level high --production
     - Write-Host "✅ Frontend audit completed"
+  cache:  # UNIQUEMENT PULL POUR LES AUTRES JOBS
+    key: "frontend-npm-${CI_COMMIT_REF_SLUG}"
+    paths:
+      - client/node_modules/
+    policy: pull
   rules:
     - if: '$CI_COMMIT_REF_NAME == "dev" || $CI_COMMIT_REF_NAME == "main"'
   allow_failure: true
@@ -131,6 +136,11 @@ audit_backend:
     - cd backend
     - npm audit --audit-level high --production
     - Write-Host "✅ Backend audit completed"
+  cache:
+    key: "backend-npm-${CI_COMMIT_REF_SLUG}"
+    paths:
+      - backend/node_modules/
+    policy: pull
   rules:
     - if: '$CI_COMMIT_REF_NAME == "dev" || $CI_COMMIT_REF_NAME == "main"'
   allow_failure: true
@@ -144,13 +154,14 @@ validate_prisma_schema:
     - cd backend
     - npx prisma validate
     - Write-Host "✅ Prisma schema validated"
+  cache:
+    key: "backend-npm-${CI_COMMIT_REF_SLUG}"
+    paths:
+      - backend/node_modules/
+    policy: pull
   rules:
     - if: '$CI_COMMIT_REF_NAME == "dev" || $CI_COMMIT_REF_NAME == "main"'
   timeout: 10 minutes
-
-# =============================================
-# VALIDATE_TEST STAGE
-# =============================================
 
 validate_frontend:
   stage: validate_test
@@ -160,6 +171,11 @@ validate_frontend:
     - cd client
     - npm run build
     - Write-Host "✅ Frontend validated successfully"
+  cache:
+    key: "frontend-npm-${CI_COMMIT_REF_SLUG}"
+    paths:
+      - client/node_modules/
+    policy: pull
   rules:
     - if: '$CI_COMMIT_REF_NAME == "dev" || $CI_COMMIT_REF_NAME == "main"'
   timeout: 10 minutes
@@ -172,6 +188,11 @@ validate_backend:
     - cd backend
     - npm run build
     - Write-Host "✅ Backend validated successfully"
+  cache:
+    key: "backend-npm-${CI_COMMIT_REF_SLUG}"
+    paths:
+      - backend/node_modules/
+    policy: pull
   rules:
     - if: '$CI_COMMIT_REF_NAME == "dev" || $CI_COMMIT_REF_NAME == "main"'
   timeout: 10 minutes
@@ -192,6 +213,11 @@ test_frontend:
           Write-Host "⚠️ No test script found in Frontend"
         }
       }
+  cache:
+    key: "frontend-npm-${CI_COMMIT_REF_SLUG}"
+    paths:
+      - client/node_modules/
+    policy: pull
   rules:
     - if: '$CI_COMMIT_REF_NAME == "dev" || $CI_COMMIT_REF_NAME == "main"'
   allow_failure: true
@@ -213,13 +239,18 @@ test_backend:
           Write-Host "⚠️ No Jest configuration found in Backend"
         }
       }
+  cache:
+    key: "backend-npm-${CI_COMMIT_REF_SLUG}"
+    paths:
+      - backend/node_modules/
+    policy: pull
   rules:
     - if: '$CI_COMMIT_REF_NAME == "dev" || $CI_COMMIT_REF_NAME == "main"'
   allow_failure: true
   timeout: 10 minutes
 
 # =============================================
-# BUILD STAGE
+# BUILD STAGE (pas de changement)
 # =============================================
 
 build_frontend_image:
@@ -277,7 +308,7 @@ build_db_image:
   timeout: 10 minutes
 
 # =============================================
-# DEPLOY STAGE
+# DEPLOY STAGE (pas de changement)
 # =============================================
 
 deploy_staging:
@@ -331,10 +362,6 @@ deploy_production:
     - windows
     - local
   timeout: 15 minutes
-
-# =============================================
-# CLEAN STAGE
-# =============================================
 
 cleanup_docker:
   stage: clean
