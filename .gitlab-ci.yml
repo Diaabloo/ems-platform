@@ -29,8 +29,8 @@ variables:
     - echo "$DOCKERHUB_TOKEN" | docker login -u "$DOCKERHUB_USERNAME" --password-stdin
   tags:
     - windows
-    - ems-platform
     - docker
+    - ems-platform
 
 .node_template: &node_template
   image: node:${NODE_VERSION}
@@ -39,8 +39,8 @@ variables:
     - npm --version
   tags:
     - windows
-    - ems-platform
     - docker
+    - ems-platform
 
 .node_postgres_template: &node_postgres_template
   image: node:${NODE_VERSION}
@@ -57,8 +57,8 @@ variables:
     - echo "✅ PostgreSQL service is running"
   tags:
     - windows
-    - ems-platform
     - docker
+    - ems-platform
 
 .alpine_template: &alpine_template
   image: alpine:latest
@@ -66,8 +66,8 @@ variables:
     - apk add --no-cache openssh-client curl
   tags:
     - windows
-    - ems-platform
     - docker
+    - ems-platform
 
 install_frontend_deps:
   stage: dependencies
