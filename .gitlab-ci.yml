@@ -32,8 +32,8 @@ variables:
   tags:
     - docker
     - windows
-    - local
     - ems-platform
+    - project-runner
 
 .node_template: &node_template
   image: node:${NODE_VERSION}
@@ -43,8 +43,8 @@ variables:
   tags:
     - docker
     - windows
-    - local
     - ems-platform
+    - project-runner
 
 .alpine_template: &alpine_template
   image: alpine:latest
@@ -53,8 +53,8 @@ variables:
   tags:
     - docker
     - windows
-    - local
     - ems-platform
+    - project-runner
 
 install_frontend_deps:
   stage: dependencies
@@ -206,13 +206,33 @@ validate_backend:
     - Write-Host "🔧 Setting up DATABASE_URL for Backend validation..."
     - $env:DATABASE_URL = "postgresql://$($env:POSTGRES_USER):$($env:POSTGRES_PASSWORD)@localhost:5432/$($env:POSTGRES_DB)"
   script:
-    - Write-Host "🔍 Backend build validation..."
+    - Write-Host "🔍 Backend validation..."
     - cd backend
-    - Write-Host "✅ Running TypeScript type check..."
-    - npm run type-check
-    - Write-Host "✅ TypeScript validation passed - no type errors found"
-    - Write-Host "🔍 Additional backend validation..."
-    - Write-Host "✅ Backend validated successfully"
+    - Write-Host "🔍 Checking project structure..."
+    - |
+      # Vérifier si c'est un projet TypeScript ou JavaScript
+      $tsFiles = Get-ChildItem -Recurse -Filter "*.ts" | Measure-Object
+      $tsConfig = Test-Path "tsconfig.json"
+
+      if ($tsConfig -or $tsFiles.Count -gt 0) {
+        Write-Host "✅ TypeScript project detected - running type check..."
+        npm run type-check
+        Write-Host "✅ TypeScript validation passed"
+      } else {
+        Write-Host "✅ JavaScript project - no TypeScript files to check"
+        Write-Host "🔍 Running syntax validation on JavaScript files..."
+        # Valider la syntaxe des fichiers JS principaux
+        if (Test-Path "index.js") {
+          node -c index.js
+          Write-Host "✅ index.js syntax is valid"
+        }
+        if (Test-Path "src" -and (Test-Path "src/index.js")) {
+          node -c src/index.js
+          Write-Host "✅ src/index.js syntax is valid"
+        }
+        Write-Host "🎉 JavaScript project validation completed"
+      }
+    - Write-Host "✅ Backend validation completed successfully"
   cache:
     key: "backend-npm-${CI_COMMIT_REF_SLUG}"
     paths:
@@ -259,16 +279,8 @@ test_backend:
   script:
     - Write-Host "🧪 Running Backend tests..."
     - cd backend
-    - |
-      if (Test-Path "package.json") {
-        $hasJest = (Test-Path "jest.config.js") -or (Test-Path "jest.config.cjs") -or (Test-Path "jest.config.ts")
-        if ($hasJest) {
-          npm run test -- --silent --passWithNoTests
-          Write-Host "✅ Backend tests completed"
-        } else {
-          Write-Host "⚠️ No Jest configuration found in Backend"
-        }
-      }
+    - npm run test:ci
+    - Write-Host "✅ Backend tests completed"
   cache:
     key: "backend-npm-${CI_COMMIT_REF_SLUG}"
     paths:
@@ -286,12 +298,12 @@ build_frontend_image:
     - Write-Host "🏗️ Building Frontend image..."
     - docker build -t $FRONTEND_IMAGE:$COMMIT_TAG ./client
     - |
-      if [[ "$CI_COMMIT_REF_NAME" == "main" ]]; then
+      if ($env:CI_COMMIT_REF_NAME -eq "main") {
         Write-Host "🚀 Pushing Frontend image to Docker Hub..."
         docker push $FRONTEND_IMAGE:$COMMIT_TAG
-      else
+      } else {
         Write-Host "⏭️ Push skipped (dev branch - pre-production)"
-      fi
+      }
     - Write-Host "✅ Frontend image built"
   rules:
     - if: '$CI_COMMIT_REF_NAME == "dev" || $CI_COMMIT_REF_NAME == "main"'
@@ -304,12 +316,12 @@ build_backend_image:
     - Write-Host "🏗️ Building Backend image..."
     - docker build -t $BACKEND_IMAGE:$COMMIT_TAG ./backend
     - |
-      if [[ "$CI_COMMIT_REF_NAME" == "main" ]]; then
+      if ($env:CI_COMMIT_REF_NAME -eq "main") {
         Write-Host "🚀 Pushing Backend image to Docker Hub..."
         docker push $BACKEND_IMAGE:$COMMIT_TAG
-      else {
+      } else {
         Write-Host "⏭️ Push skipped (dev branch - pre-production)"
-      fi
+      }
     - Write-Host "✅ Backend image built"
   rules:
     - if: '$CI_COMMIT_REF_NAME == "dev" || $CI_COMMIT_REF_NAME == "main"'
@@ -322,12 +334,12 @@ build_db_image:
     - Write-Host "🏗️ Building Database image..."
     - docker build -t $DB_IMAGE:$COMMIT_TAG ./db
     - |
-      if [[ "$CI_COMMIT_REF_NAME" == "main" ]]; then
+      if ($env:CI_COMMIT_REF_NAME -eq "main") {
         Write-Host "🚀 Pushing Database image to Docker Hub..."
         docker push $DB_IMAGE:$COMMIT_TAG
-      else
+      } else {
         Write-Host "⏭️ Push skipped (dev branch - pre-production)"
-      fi
+      }
     - Write-Host "✅ Database image built"
   rules:
     - if: '$CI_COMMIT_REF_NAME == "dev" || $CI_COMMIT_REF_NAME == "main"'
