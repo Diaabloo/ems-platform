@@ -1,3 +1,8 @@
+default:
+  tags:
+    - windows
+  before_script:
+    - echo "🔧 Running on runner with tags: ${CI_RUNNER_TAGS}"
 stages:
   - dependencies
   - security
