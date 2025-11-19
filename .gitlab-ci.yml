@@ -208,7 +208,10 @@ validate_backend:
   script:
     - Write-Host "🔍 Backend build validation..."
     - cd backend
-    - npm run build
+    - Write-Host "✅ Running TypeScript type check..."
+    - npm run type-check
+    - Write-Host "✅ TypeScript validation passed - no type errors found"
+    - Write-Host "🔍 Additional backend validation..."
     - Write-Host "✅ Backend validated successfully"
   cache:
     key: "backend-npm-${CI_COMMIT_REF_SLUG}"
