@@ -1,4 +1,4 @@
-# .gitlab-ci.yml - VERSION SÉCURISÉE AVEC VARIABLES GITLAB
+# .gitlab-ci.yml - VERSION OPTIMISÉE AVEC CACHE DOCKER LOCAL
 
 stages:
   - dependencies
@@ -22,7 +22,7 @@ variables:
   COMMIT_TAG: "sha-${CI_COMMIT_SHORT_SHA}"
 
 # =============================================
-# SUPPRIMER LE CACHE GLOBAL - UTILISER CACHE PAR JOB
+# TEMPLATES OPTIMISÉS POUR RUNNER DOCKER
 # =============================================
 
 .docker_template: &docker_template
@@ -36,40 +36,38 @@ variables:
     - docker info
     - echo "$DOCKERHUB_TOKEN" | docker login -u "$DOCKERHUB_USERNAME" --password-stdin
   tags:
-    - windows
-    - local
+    - docker  # ← UTILISE LE RUNNER DOCKER OPTIMISÉ
 
 .node_template: &node_template
-  image: node:${NODE_VERSION}
+  image: node:20  # ← DÉJÀ PRÉSENTE SUR VOTRE MACHINE
   before_script:
     - node --version
     - npm --version
+    - Write-Host "✅ Using local Node.js image - no download needed"
   tags:
-    - windows
-    - local
+    - docker  # ← UTILISE LE RUNNER DOCKER OPTIMISÉ
+
+.alpine_template: &alpine_template
+  image: alpine:latest  # ← DÉJÀ PRÉSENTE SUR VOTRE MACHINE
+  before_script:
+    - apk add --no-cache openssh-client curl
+    - Write-Host "✅ Using local Alpine image - no download needed"
+  tags:
+    - docker  # ← UTILISE LE RUNNER DOCKER OPTIMISÉ
 
 # =============================================
-# DEPENDENCIES - CACHE SÉPARÉ POUR CHAQUE SERVICE
+# DEPENDENCIES - AVEC CACHE LOCAL
 # =============================================
 
 install_frontend_deps:
   stage: dependencies
   <<: *node_template
   script:
-    - Write-Host "📦 Installing Frontend dependencies..."
+    - Write-Host "📦 Installing Frontend dependencies (using local Node image)..."
     - cd client
-    - Write-Host "🔍 Checking for existing node_modules..."
-    - |
-      if (Test-Path "node_modules") {
-        Write-Host "🔄 node_modules found, using cache..."
-        npm install --prefer-offline --no-audit
-        Write-Host "✅ Frontend dependencies updated from cache"
-      } else {
-        Write-Host "📥 Full installation (no cache found)..."
-        npm install --prefer-offline --no-audit
-        Write-Host "✅ Frontend dependencies installed"
-      }
-  cache:  # CACHE UNIQUEMENT POUR FRONTEND
+    - npm install --prefer-offline --no-audit
+    - Write-Host "✅ Frontend dependencies installed"
+  cache:
     key: "frontend-npm-${CI_COMMIT_REF_SLUG}"
     paths:
       - client/node_modules/
@@ -85,26 +83,16 @@ install_backend_deps:
     - node --version
     - npm --version
     - Write-Host "🔧 Setting up DATABASE_URL for Prisma..."
-    - $env:DATABASE_URL = "postgresql://$($env:POSTGRES_USER):$($env:POSTGRES_PASSWORD)@localhost:5432/$($env:POSTGRES_DB)"
+    - export DATABASE_URL="postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@localhost:5432/${POSTGRES_DB}"
     - Write-Host "✅ DATABASE_URL configured (using GitLab variables)"
   script:
-    - Write-Host "📦 Installing Backend dependencies..."
+    - Write-Host "📦 Installing Backend dependencies (using local Node image)..."
     - cd backend
-    - Write-Host "🔍 Checking for existing node_modules..."
-    - |
-      if (Test-Path "node_modules") {
-        Write-Host "🔄 node_modules found, using cache..."
-        npm install --prefer-offline --no-audit
-        Write-Host "✅ Backend dependencies updated from cache"
-      } else {
-        Write-Host "📥 Full installation (no cache found)..."
-        npm install --prefer-offline --no-audit
-        Write-Host "✅ Backend dependencies installed"
-      }
+    - npm install --prefer-offline --no-audit
     - Write-Host "🗄️ Generating Prisma client..."
     - npx prisma generate --no-hints
-    - Write-Host "✅ Prisma client generated successfully"
-  cache:  # CACHE UNIQUEMENT POUR BACKEND
+    - Write-Host "✅ Backend dependencies installed"
+  cache:
     key: "backend-npm-${CI_COMMIT_REF_SLUG}"
     paths:
       - backend/node_modules/
@@ -116,7 +104,7 @@ install_backend_deps:
   timeout: 10 minutes
 
 # =============================================
-# AUTRES JOBS - AVEC CACHE PULL SEULEMENT
+# SECURITY & VALIDATION
 # =============================================
 
 audit_frontend:
@@ -127,7 +115,7 @@ audit_frontend:
     - cd client
     - npm audit --audit-level high --production
     - Write-Host "✅ Frontend audit completed"
-  cache:  # UNIQUEMENT PULL POUR LES AUTRES JOBS
+  cache:
     key: "frontend-npm-${CI_COMMIT_REF_SLUG}"
     paths:
       - client/node_modules/
@@ -162,13 +150,10 @@ validate_prisma_schema:
     - node --version
     - npm --version
     - Write-Host "🔧 Setting up DATABASE_URL for Prisma validation..."
-    - $env:DATABASE_URL = "postgresql://$($env:POSTGRES_USER):$($env:POSTGRES_PASSWORD)@localhost:5432/$($env:POSTGRES_DB)"
-    - Write-Host "✅ DATABASE_URL configured for validation"
+    - export DATABASE_URL="postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@localhost:5432/${POSTGRES_DB}"
   script:
     - Write-Host "🗄️ Prisma schema validation..."
     - cd backend
-    - Write-Host "📋 Prisma schema content (first 10 lines):"
-    - Get-Content prisma/schema.prisma | Select-Object -First 10
     - npx prisma validate
     - Write-Host "✅ Prisma schema validated"
   cache:
@@ -204,15 +189,32 @@ validate_backend:
     - node --version
     - npm --version
     - Write-Host "🔧 Setting up DATABASE_URL for Backend validation..."
-    - $env:DATABASE_URL = "postgresql://$($env:POSTGRES_USER):$($env:POSTGRES_PASSWORD)@localhost:5432/$($env:POSTGRES_DB)"
+    - export DATABASE_URL="postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@localhost:5432/${POSTGRES_DB}"
   script:
-    - Write-Host "🔍 Backend build validation..."
+    - Write-Host "🔍 Backend validation..."
     - cd backend
-    - Write-Host "✅ Running TypeScript type check..."
-    - npm run type-check
-    - Write-Host "✅ TypeScript validation passed - no type errors found"
-    - Write-Host "🔍 Additional backend validation..."
-    - Write-Host "✅ Backend validated successfully"
+    - Write-Host "🔍 Checking project structure..."
+    - |
+      # Vérifier si c'est un projet TypeScript ou JavaScript
+      ts_files=$(find . -name "*.ts" | wc -l)
+      if [ -f "tsconfig.json" ] || [ $ts_files -gt 0 ]; then
+        echo "✅ TypeScript project detected - running type check..."
+        npm run type-check
+        echo "✅ TypeScript validation passed"
+      else
+        echo "✅ JavaScript project - no TypeScript files to check"
+        echo "🔍 Running syntax validation on JavaScript files..."
+        if [ -f "index.js" ]; then
+          node -c index.js
+          echo "✅ index.js syntax is valid"
+        fi
+        if [ -f "src/index.js" ]; then
+          node -c src/index.js
+          echo "✅ src/index.js syntax is valid"
+        fi
+        echo "🎉 JavaScript project validation completed"
+      fi
+    - Write-Host "✅ Backend validation completed successfully"
   cache:
     key: "backend-npm-${CI_COMMIT_REF_SLUG}"
     paths:
@@ -229,15 +231,14 @@ test_frontend:
     - Write-Host "🧪 Running Frontend tests..."
     - cd client
     - |
-      if (Test-Path "package.json") {
-        $testScript = npm run | Select-String "test"
-        if ($testScript) {
+      if [ -f "package.json" ]; then
+        if npm run | grep -q "test"; then
           npm test -- --watchAll=false --passWithNoTests --silent
-          Write-Host "✅ Frontend tests completed"
-        } else {
-          Write-Host "⚠️ No test script found in Frontend"
-        }
-      }
+          echo "✅ Frontend tests completed"
+        else
+          echo "⚠️ No test script found in Frontend"
+        fi
+      fi
   cache:
     key: "frontend-npm-${CI_COMMIT_REF_SLUG}"
     paths:
@@ -255,20 +256,12 @@ test_backend:
     - node --version
     - npm --version
     - Write-Host "🔧 Setting up DATABASE_URL for Backend tests..."
-    - $env:DATABASE_URL = "postgresql://$($env:POSTGRES_USER):$($env:POSTGRES_PASSWORD)@localhost:5432/$($env:POSTGRES_DB)"
+    - export DATABASE_URL="postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@localhost:5432/${POSTGRES_DB}"
   script:
     - Write-Host "🧪 Running Backend tests..."
     - cd backend
-    - |
-      if (Test-Path "package.json") {
-        $hasJest = (Test-Path "jest.config.js") -or (Test-Path "jest.config.cjs") -or (Test-Path "jest.config.ts")
-        if ($hasJest) {
-          npm run test -- --silent --passWithNoTests
-          Write-Host "✅ Backend tests completed"
-        } else {
-          Write-Host "⚠️ No Jest configuration found in Backend"
-        }
-      }
+    - npm run test:ci
+    - Write-Host "✅ Backend tests completed"
   cache:
     key: "backend-npm-${CI_COMMIT_REF_SLUG}"
     paths:
@@ -280,21 +273,21 @@ test_backend:
   timeout: 10 minutes
 
 # =============================================
-# BUILD STAGE
+# BUILD STAGE - AVEC IMAGES LOCALES
 # =============================================
 
 build_frontend_image:
   stage: build
   <<: *docker_template
   script:
-    - Write-Host "🏗️ Building Frontend image..."
+    - Write-Host "🏗️ Building Frontend image (using local Docker images)..."
     - docker build -t $FRONTEND_IMAGE:$COMMIT_TAG ./client
     - |
-      if [[ "$CI_COMMIT_REF_NAME" == "main" ]]; then
-        Write-Host "🚀 Pushing Frontend image to Docker Hub..."
+      if [ "$CI_COMMIT_REF_NAME" = "main" ]; then
+        echo "🚀 Pushing Frontend image to Docker Hub..."
         docker push $FRONTEND_IMAGE:$COMMIT_TAG
       else
-        Write-Host "⏭️ Push skipped (dev branch - pre-production)"
+        echo "⏭️ Push skipped (dev branch - pre-production)"
       fi
     - Write-Host "✅ Frontend image built"
   rules:
@@ -305,14 +298,14 @@ build_backend_image:
   stage: build
   <<: *docker_template
   script:
-    - Write-Host "🏗️ Building Backend image..."
+    - Write-Host "🏗️ Building Backend image (using local Docker images)..."
     - docker build -t $BACKEND_IMAGE:$COMMIT_TAG ./backend
     - |
-      if [[ "$CI_COMMIT_REF_NAME" == "main" ]]; then
-        Write-Host "🚀 Pushing Backend image to Docker Hub..."
+      if [ "$CI_COMMIT_REF_NAME" = "main" ]; then
+        echo "🚀 Pushing Backend image to Docker Hub..."
         docker push $BACKEND_IMAGE:$COMMIT_TAG
       else
-        Write-Host "⏭️ Push skipped (dev branch - pre-production)"
+        echo "⏭️ Push skipped (dev branch - pre-production)"
       fi
     - Write-Host "✅ Backend image built"
   rules:
@@ -323,14 +316,14 @@ build_db_image:
   stage: build
   <<: *docker_template
   script:
-    - Write-Host "🏗️ Building Database image..."
+    - Write-Host "🏗️ Building Database image (using local Docker images)..."
     - docker build -t $DB_IMAGE:$COMMIT_TAG ./db
     - |
-      if [[ "$CI_COMMIT_REF_NAME" == "main" ]]; then
-        Write-Host "🚀 Pushing Database image to Docker Hub..."
+      if [ "$CI_COMMIT_REF_NAME" = "main" ]; then
+        echo "🚀 Pushing Database image to Docker Hub..."
         docker push $DB_IMAGE:$COMMIT_TAG
       else
-        Write-Host "⏭️ Push skipped (dev branch - pre-production)"
+        echo "⏭️ Push skipped (dev branch - pre-production)"
       fi
     - Write-Host "✅ Database image built"
   rules:
@@ -338,17 +331,15 @@ build_db_image:
   timeout: 10 minutes
 
 # =============================================
-# DEPLOY STAGE
+# DEPLOY STAGE - AVEC IMAGE ALPINE LOCALE
 # =============================================
 
 deploy_staging:
   stage: deploy
-  image: alpine:latest
+  <<: *alpine_template
   environment:
     name: staging
     url: https://staging.ems-platform.com
-  before_script:
-    - apk add --no-cache openssh-client
   script:
     - Write-Host "🚀 AUTO Deploying to pre-production..."
     - |
@@ -360,19 +351,14 @@ deploy_staging:
     - Write-Host "✅ Pre-production deployment completed"
   rules:
     - if: '$CI_COMMIT_REF_NAME == "dev"'
-  tags:
-    - windows
-    - local
   timeout: 10 minutes
 
 deploy_production:
   stage: deploy
-  image: alpine:latest
+  <<: *alpine_template
   environment:
     name: production
     url: https://ems-platform.com
-  before_script:
-    - apk add --no-cache openssh-client curl
   script:
     - Write-Host "🚀 MANUAL Deploying to production..."
     - |
@@ -388,25 +374,15 @@ deploy_production:
   rules:
     - if: '$CI_COMMIT_REF_NAME == "main"'
       when: manual
-  tags:
-    - windows
-    - local
   timeout: 15 minutes
 
 cleanup_docker:
   stage: clean
-  image: docker:24
-  services:
-    - docker:24-dind
-  variables:
-    DOCKER_TLS_CERTDIR: ""
+  <<: *docker_template
   script:
     - Write-Host "🧹 Docker cleanup..."
     - docker system prune -f
     - Write-Host "✅ Cleanup completed"
-  tags:
-    - windows
-    - local
   when: always
   allow_failure: true
   timeout: 10 minutes
