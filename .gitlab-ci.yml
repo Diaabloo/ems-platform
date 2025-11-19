@@ -28,10 +28,10 @@ variables:
     - docker info
     - echo "$DOCKERHUB_TOKEN" | docker login -u "$DOCKERHUB_USERNAME" --password-stdin
   tags:
-    - project-runner
-    - docker
     - windows
     - ems-platform
+    - project-runner
+    - docker
 
 .node_template: &node_template
   image: node:${NODE_VERSION}
@@ -39,10 +39,10 @@ variables:
     - node --version
     - npm --version
   tags:
-    - project-runner
-    - docker
     - windows
     - ems-platform
+    - project-runner
+    - docker
 
 .node_postgres_template: &node_postgres_template
   image: node:${NODE_VERSION}
@@ -58,20 +58,20 @@ variables:
     - npm --version
     - echo "✅ PostgreSQL service is running"
   tags:
-    - project-runner
-    - docker
     - windows
     - ems-platform
+    - project-runner
+    - docker
 
 .alpine_template: &alpine_template
   image: alpine:latest
   before_script:
     - apk add --no-cache openssh-client curl
   tags:
-    - project-runner
-    - docker
     - windows
     - ems-platform
+    - project-runner
+    - docker
 
 install_frontend_deps:
   stage: dependencies
