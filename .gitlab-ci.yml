@@ -1,8 +1,3 @@
-default:
-  tags:
-    - windows
-  before_script:
-    - echo "🔧 Running on runner with tags: ${CI_RUNNER_TAGS}"
 stages:
   - dependencies
   - security
@@ -34,8 +29,8 @@ variables:
     - echo "$DOCKERHUB_TOKEN" | docker login -u "$DOCKERHUB_USERNAME" --password-stdin
   tags:
     - windows
-    - docker
     - ems-platform
+    - docker
 
 .node_template: &node_template
   image: node:${NODE_VERSION}
@@ -44,8 +39,8 @@ variables:
     - npm --version
   tags:
     - windows
-    - docker
     - ems-platform
+    - docker
 
 .node_postgres_template: &node_postgres_template
   image: node:${NODE_VERSION}
@@ -62,8 +57,8 @@ variables:
     - echo "✅ PostgreSQL service is running"
   tags:
     - windows
-    - docker
     - ems-platform
+    - docker
 
 .alpine_template: &alpine_template
   image: alpine:latest
@@ -71,8 +66,8 @@ variables:
     - apk add --no-cache openssh-client curl
   tags:
     - windows
-    - docker
     - ems-platform
+    - docker
 
 install_frontend_deps:
   stage: dependencies
