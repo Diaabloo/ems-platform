@@ -33,7 +33,6 @@ variables:
     - docker
     - windows
     - ems-platform
-    - project-runner
 
 .node_template: &node_template
   image: node:${NODE_VERSION}
