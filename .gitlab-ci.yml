@@ -56,8 +56,7 @@ variables:
   before_script:
     - node --version
     - npm --version
-    - echo "✅ PostgreSQL service is running at: ${POSTGRES_HOST}:${POSTGRES_PORT}"
-    - echo "✅ DATABASE_URL: postgresql://${POSTGRES_USER}:****@${POSTGRES_HOST}:${POSTGRES_PORT}/${POSTGRES_DB}"
+    - echo "✅ PostgreSQL service is running"
   tags:
     - project-runner
     - docker
