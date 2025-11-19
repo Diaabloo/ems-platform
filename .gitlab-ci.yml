@@ -1,5 +1,3 @@
-# .gitlab-ci.yml - VERSION SANS DOCKER-IN-DOCKER
-
 stages:
   - dependencies
   - security
@@ -20,10 +18,6 @@ variables:
   BACKEND_IMAGE: "amineelalami/ems-platform-backend"
   DB_IMAGE: "amineelalami/ems-platform-db"
   COMMIT_TAG: "sha-${CI_COMMIT_SHORT_SHA}"
-
-# =============================================
-# TEMPLATES CORRIGÉS - SANS DIND
-# =============================================
 
 .docker_template: &docker_template
   image: docker:24
@@ -50,6 +44,26 @@ variables:
     - windows
     - ems-platform
 
+.node_postgres_template: &node_postgres_template
+  image: node:${NODE_VERSION}
+  services:
+    - name: postgres:${POSTGRES_VERSION}
+      alias: postgres
+  variables:
+    POSTGRES_HOST: postgres
+    POSTGRES_PORT: 5432
+    DATABASE_URL: "postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}"
+  before_script:
+    - node --version
+    - npm --version
+    - echo "✅ PostgreSQL service is running at: ${POSTGRES_HOST}:${POSTGRES_PORT}"
+    - echo "✅ DATABASE_URL: postgresql://${POSTGRES_USER}:****@${POSTGRES_HOST}:${POSTGRES_PORT}/${POSTGRES_DB}"
+  tags:
+    - project-runner
+    - docker
+    - windows
+    - ems-platform
+
 .alpine_template: &alpine_template
   image: alpine:latest
   before_script:
@@ -59,10 +73,6 @@ variables:
     - docker
     - windows
     - ems-platform
-
-# =============================================
-# JOBS - TOUS AVEC BASH (déjà corrigés)
-# =============================================
 
 install_frontend_deps:
   stage: dependencies
@@ -92,13 +102,7 @@ install_frontend_deps:
 
 install_backend_deps:
   stage: dependencies
-  <<: *node_template
-  before_script:
-    - node --version
-    - npm --version
-    - echo "🔧 Setting up DATABASE_URL for Prisma..."
-    - export DATABASE_URL="postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@localhost:5432/${POSTGRES_DB}"
-    - echo "✅ DATABASE_URL configured (using GitLab variables)"
+  <<: *node_postgres_template
   script:
     - echo "📦 Installing Backend dependencies..."
     - cd backend
@@ -165,13 +169,7 @@ audit_backend:
 
 validate_prisma_schema:
   stage: security
-  <<: *node_template
-  before_script:
-    - node --version
-    - npm --version
-    - echo "🔧 Setting up DATABASE_URL for Prisma validation..."
-    - export DATABASE_URL="postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@localhost:5432/${POSTGRES_DB}"
-    - echo "✅ DATABASE_URL configured for validation"
+  <<: *node_postgres_template
   script:
     - echo "🗄️ Prisma schema validation..."
     - cd backend
@@ -187,6 +185,7 @@ validate_prisma_schema:
   rules:
     - if: '$CI_COMMIT_REF_NAME == "dev" || $CI_COMMIT_REF_NAME == "main"'
   timeout: 10 minutes
+
 
 validate_frontend:
   stage: validate_test
@@ -207,12 +206,7 @@ validate_frontend:
 
 validate_backend:
   stage: validate_test
-  <<: *node_template
-  before_script:
-    - node --version
-    - npm --version
-    - echo "🔧 Setting up DATABASE_URL for Backend validation..."
-    - export DATABASE_URL="postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@localhost:5432/${POSTGRES_DB}"
+  <<: *node_postgres_template
   script:
     - echo "🔍 Backend validation..."
     - cd backend
@@ -275,12 +269,7 @@ test_frontend:
 
 test_backend:
   stage: validate_test
-  <<: *node_template
-  before_script:
-    - node --version
-    - npm --version
-    - echo "🔧 Setting up DATABASE_URL for Backend tests..."
-    - export DATABASE_URL="postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@localhost:5432/${POSTGRES_DB}"
+  <<: *node_postgres_template
   script:
     - echo "🧪 Running Backend tests..."
     - cd backend
