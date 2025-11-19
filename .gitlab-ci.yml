@@ -1,4 +1,4 @@
-# .gitlab-ci.yml - VERSION AVEC CACHE SÉPARÉ
+# .gitlab-ci.yml - VERSION SÉCURISÉE AVEC VARIABLES GITLAB
 
 stages:
   - dependencies
@@ -81,6 +81,12 @@ install_frontend_deps:
 install_backend_deps:
   stage: dependencies
   <<: *node_template
+  before_script:
+    - node --version
+    - npm --version
+    - Write-Host "🔧 Setting up DATABASE_URL for Prisma..."
+    - $env:DATABASE_URL = "postgresql://$($env:POSTGRES_USER):$($env:POSTGRES_PASSWORD)@localhost:5432/$($env:POSTGRES_DB)"
+    - Write-Host "✅ DATABASE_URL configured (using GitLab variables)"
   script:
     - Write-Host "📦 Installing Backend dependencies..."
     - cd backend
@@ -97,10 +103,13 @@ install_backend_deps:
       }
     - Write-Host "🗄️ Generating Prisma client..."
     - npx prisma generate --no-hints
+    - Write-Host "✅ Prisma client generated successfully"
   cache:  # CACHE UNIQUEMENT POUR BACKEND
     key: "backend-npm-${CI_COMMIT_REF_SLUG}"
     paths:
       - backend/node_modules/
+      - backend/node_modules/.prisma/
+      - backend/node_modules/@prisma/
     policy: pull-push
   rules:
     - if: '$CI_COMMIT_REF_NAME == "dev" || $CI_COMMIT_REF_NAME == "main"'
@@ -149,9 +158,17 @@ audit_backend:
 validate_prisma_schema:
   stage: security
   <<: *node_template
+  before_script:
+    - node --version
+    - npm --version
+    - Write-Host "🔧 Setting up DATABASE_URL for Prisma validation..."
+    - $env:DATABASE_URL = "postgresql://$($env:POSTGRES_USER):$($env:POSTGRES_PASSWORD)@localhost:5432/$($env:POSTGRES_DB)"
+    - Write-Host "✅ DATABASE_URL configured for validation"
   script:
     - Write-Host "🗄️ Prisma schema validation..."
     - cd backend
+    - Write-Host "📋 Prisma schema content (first 10 lines):"
+    - Get-Content prisma/schema.prisma | Select-Object -First 10
     - npx prisma validate
     - Write-Host "✅ Prisma schema validated"
   cache:
@@ -183,6 +200,11 @@ validate_frontend:
 validate_backend:
   stage: validate_test
   <<: *node_template
+  before_script:
+    - node --version
+    - npm --version
+    - Write-Host "🔧 Setting up DATABASE_URL for Backend validation..."
+    - $env:DATABASE_URL = "postgresql://$($env:POSTGRES_USER):$($env:POSTGRES_PASSWORD)@localhost:5432/$($env:POSTGRES_DB)"
   script:
     - Write-Host "🔍 Backend build validation..."
     - cd backend
@@ -226,6 +248,11 @@ test_frontend:
 test_backend:
   stage: validate_test
   <<: *node_template
+  before_script:
+    - node --version
+    - npm --version
+    - Write-Host "🔧 Setting up DATABASE_URL for Backend tests..."
+    - $env:DATABASE_URL = "postgresql://$($env:POSTGRES_USER):$($env:POSTGRES_PASSWORD)@localhost:5432/$($env:POSTGRES_DB)"
   script:
     - Write-Host "🧪 Running Backend tests..."
     - cd backend
@@ -250,7 +277,7 @@ test_backend:
   timeout: 10 minutes
 
 # =============================================
-# BUILD STAGE (pas de changement)
+# BUILD STAGE
 # =============================================
 
 build_frontend_image:
@@ -308,7 +335,7 @@ build_db_image:
   timeout: 10 minutes
 
 # =============================================
-# DEPLOY STAGE (pas de changement)
+# DEPLOY STAGE
 # =============================================
 
 deploy_staging:
