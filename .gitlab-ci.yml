@@ -19,6 +19,10 @@ variables:
   DB_IMAGE: "amineelalami/ems-platform-db"
   COMMIT_TAG: "sha-${CI_COMMIT_SHORT_SHA}"
 
+# =============================================
+# TEMPLATES PROFESSIONNELS
+# =============================================
+
 .docker_template: &docker_template
   image: docker:24
   services:
@@ -30,9 +34,10 @@ variables:
     - docker info
     - echo "$DOCKERHUB_TOKEN" | docker login -u "$DOCKERHUB_USERNAME" --password-stdin
   tags:
-    - docker
-    - windows
-    - ems-platform
+    - project-runner    # Runner dédié au projet
+    - docker           # Exécution Docker
+    - windows          # Environnement Windows
+    - ems-platform     # Application spécifique
 
 .node_template: &node_template
   image: node:${NODE_VERSION}
@@ -40,21 +45,26 @@ variables:
     - node --version
     - npm --version
   tags:
+    - project-runner
     - docker
     - windows
     - ems-platform
-    - project-runner
 
 .alpine_template: &alpine_template
   image: alpine:latest
   before_script:
     - apk add --no-cache openssh-client curl
   tags:
+    - project-runner
     - docker
     - windows
     - ems-platform
-    - project-runner
 
+# =============================================
+# JOBS - STRUCTURE PROFESSIONNELLE
+# =============================================
+
+# DÉPENDANCES
 install_frontend_deps:
   stage: dependencies
   <<: *node_template
@@ -118,6 +128,7 @@ install_backend_deps:
     - if: '$CI_COMMIT_REF_NAME == "dev" || $CI_COMMIT_REF_NAME == "main"'
   timeout: 10 minutes
 
+# SÉCURITÉ
 audit_frontend:
   stage: security
   <<: *node_template
@@ -179,6 +190,7 @@ validate_prisma_schema:
     - if: '$CI_COMMIT_REF_NAME == "dev" || $CI_COMMIT_REF_NAME == "main"'
   timeout: 10 minutes
 
+# VALIDATION & TESTS
 validate_frontend:
   stage: validate_test
   <<: *node_template
@@ -290,6 +302,7 @@ test_backend:
   allow_failure: true
   timeout: 10 minutes
 
+# BUILD
 build_frontend_image:
   stage: build
   <<: *docker_template
@@ -344,6 +357,7 @@ build_db_image:
     - if: '$CI_COMMIT_REF_NAME == "dev" || $CI_COMMIT_REF_NAME == "main"'
   timeout: 10 minutes
 
+# DÉPLOIEMENT
 deploy_staging:
   stage: deploy
   <<: *alpine_template
@@ -386,6 +400,7 @@ deploy_production:
       when: manual
   timeout: 15 minutes
 
+# NETTOYAGE
 cleanup_docker:
   stage: clean
   <<: *docker_template
