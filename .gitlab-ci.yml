@@ -69,11 +69,11 @@ variables:
     - echo "🔧 Node.js + PostgreSQL Environment Setup"
     - node --version
     - npm --version
+    - echo "📦 Installing PostgreSQL client tools..."
+    - apt-get update && apt-get install -y postgresql-client || apk add --no-cache postgresql-client || yum install -y postgresql
     - echo "🔄 Waiting for PostgreSQL to be ready..."
     - timeout 30s bash -c 'until pg_isready -h postgres -p 5432; do sleep 2; done'
     - echo "✅ PostgreSQL service is running"
-    - echo "🔍 Active Docker containers:"
-    - docker ps
     - echo "🔍 Database connection test:"
     - pg_isready -h postgres -p 5432
   tags:
