@@ -222,7 +222,13 @@ audit_backend:
     - echo "🔒 Backend security audit..."
     - cd backend
     - echo "📋 Audit report:"
-    - npm audit --audit-level high --production --json > audit-backend.json 2>/dev/null || echo '{"vulnerabilities": {}}' > audit-backend.json
+    # Solution 1: Séparer la commande en deux étapes
+    - npm audit --audit-level high --production --json > audit-backend.json 2>/dev/null || true
+    - |
+      # Vérifier si le fichier a été créé, sinon créer un JSON vide
+      if [ ! -s audit-backend.json ]; then
+        echo '{"vulnerabilities": {}}' > audit-backend.json
+      fi
     - echo "✅ Backend audit completed"
   artifacts:
     paths:
