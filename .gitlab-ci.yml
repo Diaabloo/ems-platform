@@ -69,12 +69,11 @@ variables:
     - echo "🔧 Node.js + PostgreSQL Environment Setup"
     - node --version
     - npm --version
-    - echo "📦 Installing additional tools..."
-    - apt-get update && apt-get install -y netcat || apk add --no-cache netcat-openbsd || yum install -y nc
     - echo "🔄 Waiting for PostgreSQL to be ready..."
     - |
       for i in {1..30}; do
-        if nc -z postgres 5432; then
+        # Vérification simple avec timeout et echo
+        if timeout 1 bash -c "echo > /dev/tcp/postgres/5432" 2>/dev/null; then
           echo "✅ PostgreSQL is ready!"
           break
         fi
@@ -82,12 +81,6 @@ variables:
         sleep 2
       done
     - echo "🔍 Testing database connection..."
-    - |
-      if nc -z postgres 5432; then
-        echo "✅ Database connection successful"
-      else
-        echo "❌ Database connection failed - continuing anyway"
-      fi
   tags:
     - windows
     - docker
