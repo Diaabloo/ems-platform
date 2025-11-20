@@ -190,17 +190,22 @@ install_backend_deps:
 audit_frontend:
   stage: security
   <<: *node_template
+  variables:
+    GIT_DEPTH: 50
   dependencies:
     - install_frontend_deps
+  before_script:
+    - mkdir -p artifacts
   script:
     - echo "🔒 Frontend security audit..."
     - cd client
     - echo "📋 Audit report:"
-    - npm audit --audit-level high --production --json > audit-frontend.json || true
+    - npm audit --audit-level high --production --json > ../artifacts/audit-frontend.json
+    - echo "NPM audit completed with exit code: $?"
     - echo "✅ Frontend audit completed"
   artifacts:
     paths:
-      - client/audit-frontend.json
+      - artifacts/audit-frontend.json
     expire_in: 1 week
     when: always
   rules:
@@ -217,10 +222,7 @@ audit_backend:
     - echo "🔒 Backend security audit..."
     - cd backend
     - echo "📋 Audit report:"
-    - |
-      # Try audit, fallback JSON if audit fails
-      npm audit --audit-level high --production --json > audit-backend.json 2>/dev/null \
-      || echo '{"vulnerabilities": {}}' > audit-backend.json
+    - npm audit --audit-level high --production --json > audit-backend.json 2>/dev/null || echo '{"vulnerabilities": {}}' > audit-backend.json
     - echo "✅ Backend audit completed"
   artifacts:
     paths:
@@ -231,7 +233,6 @@ audit_backend:
     - if: '$CI_COMMIT_REF_NAME == "dev" || $CI_COMMIT_REF_NAME == "main"'
   allow_failure: true
   timeout: 10 minutes
-
 
 validate_prisma_schema:
   stage: security
