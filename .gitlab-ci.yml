@@ -318,12 +318,15 @@ test_backend:
   dependencies:
     - install_backend_deps
   script:
-    - echo "🧪 Running Backend tests..."
-    - cd backend
-    - echo "🔧 Test environment setup..."
-    - echo "DATABASE_URL: $DATABASE_URL"
-    - npm run test:ci
-    - echo "✅ Backend tests completed"
+    - |
+      echo "🧪 Running Backend tests..."
+      cd backend
+      echo "🔧 Test environment setup..."
+      echo "Database host: ${POSTGRES_HOST}"
+      echo "Database port: ${POSTGRES_PORT}"
+      echo "Database name: ${POSTGRES_DB}"
+      npm run test:ci
+      echo "✅ Backend tests completed"
   artifacts:
     paths:
       - backend/coverage/
