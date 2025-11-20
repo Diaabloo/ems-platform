@@ -481,7 +481,7 @@ deploy_production:
     - windows
     - docker
     - ems-platform
-  timeout: 15 minutes
+  timeout: 5 minutes
 
 cleanup_docker:
   stage: clean
