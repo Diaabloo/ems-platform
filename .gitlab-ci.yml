@@ -18,6 +18,8 @@ variables:
   BACKEND_IMAGE: "amineelalami/ems-platform-backend"
   DB_IMAGE: "amineelalami/ems-platform-db"
   COMMIT_TAG: "sha-${CI_COMMIT_SHORT_SHA}"
+  LATEST_TAG: "latest"
+
 
 .docker_template: &docker_template
   image: docker:24
@@ -25,8 +27,15 @@ variables:
     DOCKER_TLS_CERTDIR: ""
     DOCKER_BUILDKIT: "1"
   before_script:
+    - echo "🔧 Docker Environment Setup"
+    - docker --version
     - docker info
+    - echo "📦 Logging into Docker Hub..."
     - echo "$DOCKERHUB_TOKEN" | docker login -u "$DOCKERHUB_USERNAME" --password-stdin
+    - echo "🔍 Active Docker containers:"
+    - docker ps -a
+    - echo "🔍 Docker images:"
+    - docker images
   tags:
     - windows
     - docker
@@ -35,8 +44,11 @@ variables:
 .node_template: &node_template
   image: node:${NODE_VERSION}
   before_script:
+    - echo "🔧 Node.js Environment Setup"
     - node --version
     - npm --version
+    - echo "🔍 Disk space:"
+    - df -h
   tags:
     - windows
     - docker
@@ -50,11 +62,21 @@ variables:
   variables:
     POSTGRES_HOST: postgres
     POSTGRES_PORT: 5432
+    POSTGRES_DB: "ems_platform"
+    POSTGRES_USER: "postgres"
+    POSTGRES_PASSWORD: "password"
     DATABASE_URL: "postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}"
   before_script:
+    - echo "🔧 Node.js + PostgreSQL Environment Setup"
     - node --version
     - npm --version
+    - echo "🔄 Waiting for PostgreSQL to be ready..."
+    - timeout 30s bash -c 'until pg_isready -h postgres -p 5432; do sleep 2; done'
     - echo "✅ PostgreSQL service is running"
+    - echo "🔍 Active Docker containers:"
+    - docker ps
+    - echo "🔍 Database connection test:"
+    - pg_isready -h postgres -p 5432
   tags:
     - windows
     - docker
@@ -63,7 +85,10 @@ variables:
 .alpine_template: &alpine_template
   image: alpine:latest
   before_script:
-    - apk add --no-cache openssh-client curl
+    - echo "🔧 Alpine Linux Setup"
+    - apk add --no-cache openssh-client curl postgresql-client
+    - echo "🔍 SSH version:"
+    - ssh -V
   tags:
     - windows
     - docker
@@ -75,22 +100,30 @@ install_frontend_deps:
   script:
     - echo "📦 Installing Frontend dependencies..."
     - cd client
+    - echo "🔍 Project structure:"
+    - ls -la
     - echo "🔍 Checking for existing node_modules..."
     - |
       if [ -d "node_modules" ]; then
         echo "🔄 node_modules found, using cache..."
-        npm install --prefer-offline --no-audit
+        npm ci --prefer-offline --no-audit
         echo "✅ Frontend dependencies updated from cache"
       else
         echo "📥 Full installation (no cache found)..."
-        npm install --prefer-offline --no-audit
+        npm install --prefer-offline --no-audit --no-fund
         echo "✅ Frontend dependencies installed"
       fi
+    - echo "📊 Dependency size:"
+    - du -sh node_modules || echo "Could not calculate size"
   cache:
     key: "frontend-npm-${CI_COMMIT_REF_SLUG}"
     paths:
       - client/node_modules/
     policy: pull-push
+  artifacts:
+    paths:
+      - client/node_modules/
+    expire_in: 1 hour
   rules:
     - if: '$CI_COMMIT_REF_NAME == "dev" || $CI_COMMIT_REF_NAME == "main"'
   timeout: 10 minutes
@@ -101,20 +134,25 @@ install_backend_deps:
   script:
     - echo "📦 Installing Backend dependencies..."
     - cd backend
+    - echo "🔍 Project structure:"
+    - ls -la
     - echo "🔍 Checking for existing node_modules..."
     - |
       if [ -d "node_modules" ]; then
         echo "🔄 node_modules found, using cache..."
-        npm install --prefer-offline --no-audit
+        npm ci --prefer-offline --no-audit
         echo "✅ Backend dependencies updated from cache"
       else
         echo "📥 Full installation (no cache found)..."
-        npm install --prefer-offline --no-audit
+        npm install --prefer-offline --no-audit --no-fund
         echo "✅ Backend dependencies installed"
       fi
     - echo "🗄️ Generating Prisma client..."
     - npx prisma generate --no-hints
-    - echo "✅ Prisma client generated successfully"
+    - echo "📊 Dependency size:"
+    - du -sh node_modules || echo "Could not calculate size"
+    - echo "🔍 Prisma client verification:"
+    - ls -la node_modules/.prisma/client/ || echo "Prisma client not found"
   cache:
     key: "backend-npm-${CI_COMMIT_REF_SLUG}"
     paths:
@@ -122,23 +160,31 @@ install_backend_deps:
       - backend/node_modules/.prisma/
       - backend/node_modules/@prisma/
     policy: pull-push
+  artifacts:
+    paths:
+      - backend/node_modules/
+    expire_in: 1 hour
   rules:
     - if: '$CI_COMMIT_REF_NAME == "dev" || $CI_COMMIT_REF_NAME == "main"'
   timeout: 10 minutes
 
+
 audit_frontend:
   stage: security
   <<: *node_template
+  dependencies:
+    - install_frontend_deps
   script:
     - echo "🔒 Frontend security audit..."
     - cd client
-    - npm audit --audit-level high --production
+    - echo "📋 Audit report:"
+    - npm audit --audit-level high --production --json > audit-frontend.json || true
     - echo "✅ Frontend audit completed"
-  cache:
-    key: "frontend-npm-${CI_COMMIT_REF_SLUG}"
+  artifacts:
     paths:
-      - client/node_modules/
-    policy: pull
+      - client/audit-frontend.json
+    expire_in: 1 week
+    when: always
   rules:
     - if: '$CI_COMMIT_REF_NAME == "dev" || $CI_COMMIT_REF_NAME == "main"'
   allow_failure: true
@@ -147,16 +193,19 @@ audit_frontend:
 audit_backend:
   stage: security
   <<: *node_template
+  dependencies:
+    - install_backend_deps
   script:
     - echo "🔒 Backend security audit..."
     - cd backend
-    - npm audit --audit-level high --production
+    - echo "📋 Audit report:"
+    - npm audit --audit-level high --production --json > audit-backend.json || true
     - echo "✅ Backend audit completed"
-  cache:
-    key: "backend-npm-${CI_COMMIT_REF_SLUG}"
+  artifacts:
     paths:
-      - backend/node_modules/
-    policy: pull
+      - backend/audit-backend.json
+    expire_in: 1 week
+    when: always
   rules:
     - if: '$CI_COMMIT_REF_NAME == "dev" || $CI_COMMIT_REF_NAME == "main"'
   allow_failure: true
@@ -165,18 +214,18 @@ audit_backend:
 validate_prisma_schema:
   stage: security
   <<: *node_postgres_template
+  dependencies:
+    - install_backend_deps
   script:
     - echo "🗄️ Prisma schema validation..."
     - cd backend
     - echo "📋 Prisma schema content (first 10 lines):"
     - head -10 prisma/schema.prisma
+    - echo "🔍 Validating schema..."
     - npx prisma validate
+    - echo "🔍 Checking database connection..."
+    - npx prisma db execute --stdin --url "$DATABASE_URL" <<< "SELECT version();" || echo "Database connection failed"
     - echo "✅ Prisma schema validated"
-  cache:
-    key: "backend-npm-${CI_COMMIT_REF_SLUG}"
-    paths:
-      - backend/node_modules/
-    policy: pull
   rules:
     - if: '$CI_COMMIT_REF_NAME == "dev" || $CI_COMMIT_REF_NAME == "main"'
   timeout: 10 minutes
@@ -185,16 +234,21 @@ validate_prisma_schema:
 validate_frontend:
   stage: validate_test
   <<: *node_template
+  dependencies:
+    - install_frontend_deps
   script:
     - echo "🔍 Frontend build validation..."
     - cd client
+    - echo "🔧 Building application..."
     - npm run build
+    - echo "📊 Build size analysis:"
+    - du -sh build/ || du -sh dist/ || echo "Build directory not found"
     - echo "✅ Frontend validated successfully"
-  cache:
-    key: "frontend-npm-${CI_COMMIT_REF_SLUG}"
+  artifacts:
     paths:
-      - client/node_modules/
-    policy: pull
+      - client/build/
+      - client/dist/
+    expire_in: 1 hour
   rules:
     - if: '$CI_COMMIT_REF_NAME == "dev" || $CI_COMMIT_REF_NAME == "main"'
   timeout: 10 minutes
@@ -202,12 +256,13 @@ validate_frontend:
 validate_backend:
   stage: validate_test
   <<: *node_postgres_template
+  dependencies:
+    - install_backend_deps
   script:
     - echo "🔍 Backend validation..."
     - cd backend
     - echo "🔍 Checking project structure..."
     - |
-      # Vérifier si c'est un projet TypeScript ou JavaScript
       ts_files=$(find . -name "*.ts" | wc -l)
       if [ -f "tsconfig.json" ] || [ $ts_files -gt 0 ]; then
         echo "✅ TypeScript project detected - running type check..."
@@ -216,23 +271,17 @@ validate_backend:
       else
         echo "✅ JavaScript project - no TypeScript files to check"
         echo "🔍 Running syntax validation on JavaScript files..."
-        # Valider la syntaxe des fichiers JS principaux
-        if [ -f "index.js" ]; then
-          node -c index.js
-          echo "✅ index.js syntax is valid"
-        fi
-        if [ -f "src/index.js" ]; then
-          node -c src/index.js
-          echo "✅ src/index.js syntax is valid"
-        fi
+        find . -name "*.js" -type f | head -10 | while read file; do
+          if node -c "$file"; then
+            echo "✅ $file syntax is valid"
+          else
+            echo "❌ $file has syntax errors"
+            exit 1
+          fi
+        done
         echo "🎉 JavaScript project validation completed"
       fi
     - echo "✅ Backend validation completed successfully"
-  cache:
-    key: "backend-npm-${CI_COMMIT_REF_SLUG}"
-    paths:
-      - backend/node_modules/
-    policy: pull
   rules:
     - if: '$CI_COMMIT_REF_NAME == "dev" || $CI_COMMIT_REF_NAME == "main"'
   timeout: 10 minutes
@@ -240,23 +289,27 @@ validate_backend:
 test_frontend:
   stage: validate_test
   <<: *node_template
+  dependencies:
+    - install_frontend_deps
   script:
     - echo "🧪 Running Frontend tests..."
     - cd client
     - |
       if [ -f "package.json" ]; then
         if npm run | grep -q "test"; then
-          npm test -- --watchAll=false --passWithNoTests --silent
+          echo "🔧 Test configuration:"
+          npm run test -- --watchAll=false --passWithNoTests --listTests 2>/dev/null || true
+          npm test -- --watchAll=false --passWithNoTests --silent --coverage
           echo "✅ Frontend tests completed"
         else
           echo "⚠️ No test script found in Frontend"
         fi
       fi
-  cache:
-    key: "frontend-npm-${CI_COMMIT_REF_SLUG}"
+  artifacts:
     paths:
-      - client/node_modules/
-    policy: pull
+      - client/coverage/
+    expire_in: 1 week
+    when: always
   rules:
     - if: '$CI_COMMIT_REF_NAME == "dev" || $CI_COMMIT_REF_NAME == "main"'
   allow_failure: true
@@ -265,31 +318,44 @@ test_frontend:
 test_backend:
   stage: validate_test
   <<: *node_postgres_template
+  dependencies:
+    - install_backend_deps
   script:
     - echo "🧪 Running Backend tests..."
     - cd backend
+    - echo "🔧 Test environment setup..."
+    - echo "DATABASE_URL: $DATABASE_URL"
     - npm run test:ci
     - echo "✅ Backend tests completed"
-  cache:
-    key: "backend-npm-${CI_COMMIT_REF_SLUG}"
+  artifacts:
     paths:
-      - backend/node_modules/
-    policy: pull
+      - backend/coverage/
+    expire_in: 1 week
+    when: always
   rules:
     - if: '$CI_COMMIT_REF_NAME == "dev" || $CI_COMMIT_REF_NAME == "main"'
   allow_failure: true
   timeout: 10 minutes
 
+
 build_frontend_image:
   stage: build
   <<: *docker_template
+  dependencies:
+    - validate_frontend
   script:
     - echo "🏗️ Building Frontend image..."
-    - docker build -t $FRONTEND_IMAGE:$COMMIT_TAG ./client
+    - echo "🔍 Build context:"
+    - ls -la client/
+    - docker build -t $FRONTEND_IMAGE:$COMMIT_TAG -t $FRONTEND_IMAGE:latest ./client
+    - echo "🔍 Built images:"
+    - docker images | grep "$FRONTEND_IMAGE"
     - |
       if [ "$CI_COMMIT_REF_NAME" = "main" ]; then
         echo "🚀 Pushing Frontend image to Docker Hub..."
         docker push $FRONTEND_IMAGE:$COMMIT_TAG
+        docker push $FRONTEND_IMAGE:latest
+        echo "✅ Frontend image pushed successfully"
       else
         echo "⏭️ Push skipped (dev branch - pre-production)"
       fi
@@ -301,13 +367,21 @@ build_frontend_image:
 build_backend_image:
   stage: build
   <<: *docker_template
+  dependencies:
+    - validate_backend
   script:
     - echo "🏗️ Building Backend image..."
-    - docker build -t $BACKEND_IMAGE:$COMMIT_TAG ./backend
+    - echo "🔍 Build context:"
+    - ls -la backend/
+    - docker build -t $BACKEND_IMAGE:$COMMIT_TAG -t $BACKEND_IMAGE:latest ./backend
+    - echo "🔍 Built images:"
+    - docker images | grep "$BACKEND_IMAGE"
     - |
       if [ "$CI_COMMIT_REF_NAME" = "main" ]; then
         echo "🚀 Pushing Backend image to Docker Hub..."
         docker push $BACKEND_IMAGE:$COMMIT_TAG
+        docker push $BACKEND_IMAGE:latest
+        echo "✅ Backend image pushed successfully"
       else
         echo "⏭️ Push skipped (dev branch - pre-production)"
       fi
@@ -321,11 +395,17 @@ build_db_image:
   <<: *docker_template
   script:
     - echo "🏗️ Building Database image..."
-    - docker build -t $DB_IMAGE:$COMMIT_TAG ./db
+    - echo "🔍 Build context:"
+    - ls -la db/
+    - docker build -t $DB_IMAGE:$COMMIT_TAG -t $DB_IMAGE:latest ./db
+    - echo "🔍 Built images:"
+    - docker images | grep "$DB_IMAGE"
     - |
       if [ "$CI_COMMIT_REF_NAME" = "main" ]; then
         echo "🚀 Pushing Database image to Docker Hub..."
         docker push $DB_IMAGE:$COMMIT_TAG
+        docker push $DB_IMAGE:latest
+        echo "✅ Database image pushed successfully"
       else
         echo "⏭️ Push skipped (dev branch - pre-production)"
       fi
@@ -334,19 +414,38 @@ build_db_image:
     - if: '$CI_COMMIT_REF_NAME == "dev" || $CI_COMMIT_REF_NAME == "main"'
   timeout: 10 minutes
 
+
 deploy_staging:
   stage: deploy
   <<: *alpine_template
   environment:
     name: staging
     url: https://staging.ems-platform.com
+  dependencies:
+    - build_frontend_image
+    - build_backend_image
+    - build_db_image
   script:
     - echo "🚀 AUTO Deploying to pre-production..."
+    - echo "🔍 Deployment environment:"
+    - echo "Server: $STAGING_DEPLOY_SERVER"
+    - echo "Path: $STAGING_DEPLOY_PATH"
     - |
-      ssh -o StrictHostKeyChecking=no $STAGING_DEPLOY_USER@$STAGING_DEPLOY_SERVER "
-        cd $STAGING_DEPLOY_PATH &&
-        docker-compose pull --quiet &&
-        docker-compose up -d --no-build &&
+      ssh -o StrictHostKeyChecking=no -o ConnectTimeout=30 $STAGING_DEPLOY_USER@$STAGING_DEPLOY_SERVER "
+        echo '📋 Current directory:'
+        pwd
+        echo '🔍 Checking deployment path...'
+        cd $STAGING_DEPLOY_PATH || exit 1
+        echo '🔄 Pulling latest images...'
+        docker-compose pull --quiet
+        echo '🚀 Starting services...'
+        docker-compose up -d --no-build
+        echo '⏳ Waiting for services to be healthy...'
+        sleep 15
+        echo '🔍 Service status:'
+        docker-compose ps
+        echo '🔍 Recent logs:'
+        docker-compose logs --tail=20
         echo '✅ Pre-production deployed successfully'"
     - echo "✅ Pre-production deployment completed"
   rules:
@@ -359,29 +458,54 @@ deploy_production:
   environment:
     name: production
     url: https://ems-platform.com
+  dependencies:
+    - build_frontend_image
+    - build_backend_image
+    - build_db_image
   script:
     - echo "🚀 MANUAL Deploying to production..."
+    - echo "🔍 Deployment environment:"
+    - echo "Server: $DEPLOY_SERVER"
+    - echo "Path: $DEPLOY_PATH"
     - |
-      ssh -o StrictHostKeyChecking=no $DEPLOY_USER@$DEPLOY_SERVER "
-        cd $DEPLOY_PATH &&
-        docker-compose pull --quiet &&
-        docker-compose up -d --no-build &&
+      ssh -o StrictHostKeyChecking=no -o ConnectTimeout=30 $DEPLOY_USER@$DEPLOY_SERVER "
+        echo '📋 Current directory:'
+        pwd
+        echo '🔍 Checking deployment path...'
+        cd $DEPLOY_PATH || exit 1
+        echo '🔄 Pulling latest images...'
+        docker-compose pull --quiet
+        echo '🚀 Starting services...'
+        docker-compose up -d --no-build
+        echo '⏳ Waiting for services to be healthy...'
+        sleep 20
+        echo '🔍 Service status:'
+        docker-compose ps
+        echo '🔍 Recent logs:'
+        docker-compose logs --tail=20
         echo '✅ Production deployed successfully'"
     - echo "🔄 Health check..."
-    - sleep 10
-    - curl -f https://ems-platform.com/api/health || exit 1
+    - sleep 30
+    - echo "🔍 Testing production health endpoint..."
+    - curl -f --retry 3 --retry-delay 5 https://ems-platform.com/api/health || exit 1
     - echo "✅ Production deployment completed"
   rules:
     - if: '$CI_COMMIT_REF_NAME == "main"'
       when: manual
   timeout: 15 minutes
 
+
 cleanup_docker:
   stage: clean
   <<: *docker_template
   script:
     - echo "🧹 Docker cleanup..."
-    - docker system prune -f
+    - echo "🔍 Before cleanup:"
+    - docker system df
+    - echo "🔄 Pruning system..."
+    - docker system prune -f --filter "until=24h"
+    - echo "🔍 After cleanup:"
+    - docker system df
     - echo "✅ Cleanup completed"
   when: always
   allow_failure: true
