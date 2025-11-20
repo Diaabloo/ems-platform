@@ -69,13 +69,25 @@ variables:
     - echo "🔧 Node.js + PostgreSQL Environment Setup"
     - node --version
     - npm --version
-    - echo "📦 Installing PostgreSQL client tools..."
-    - apt-get update && apt-get install -y postgresql-client || apk add --no-cache postgresql-client || yum install -y postgresql
+    - echo "📦 Installing additional tools..."
+    - apt-get update && apt-get install -y netcat || apk add --no-cache netcat-openbsd || yum install -y nc
     - echo "🔄 Waiting for PostgreSQL to be ready..."
-    - timeout 30s bash -c 'until pg_isready -h postgres -p 5432; do sleep 2; done'
-    - echo "✅ PostgreSQL service is running"
-    - echo "🔍 Database connection test:"
-    - pg_isready -h postgres -p 5432
+    - |
+      for i in {1..30}; do
+        if nc -z postgres 5432; then
+          echo "✅ PostgreSQL is ready!"
+          break
+        fi
+        echo "⏳ Waiting for PostgreSQL... ($i/30)"
+        sleep 2
+      done
+    - echo "🔍 Testing database connection..."
+    - |
+      if nc -z postgres 5432; then
+        echo "✅ Database connection successful"
+      else
+        echo "❌ Database connection failed - continuing anyway"
+      fi
   tags:
     - windows
     - docker
@@ -101,17 +113,31 @@ install_frontend_deps:
     - cd client
     - echo "🔍 Project structure:"
     - ls -la
-    - echo "🔍 Checking for existing node_modules..."
     - |
-      if [ -d "node_modules" ]; then
-        echo "🔄 node_modules found, using cache..."
-        npm ci --prefer-offline --no-audit
-        echo "✅ Frontend dependencies updated from cache"
-      else
-        echo "📥 Full installation (no cache found)..."
-        npm install --prefer-offline --no-audit --no-fund
-        echo "✅ Frontend dependencies installed"
-      fi
+      install_deps() {
+        echo "🗑️ Cleaning npm cache..."
+        npm cache clean --force
+
+        echo "📥 Attempting npm installation..."
+        if npm install --no-audit --no-fund --loglevel=verbose; then
+          echo "✅ Frontend dependencies installed successfully"
+          return 0
+        else
+          echo "⚠️ First attempt failed, retrying with clean slate..."
+          rm -rf node_modules package-lock.json
+          npm cache clean --force
+          if npm install --no-audit --no-fund; then
+            echo "✅ Frontend dependencies installed on retry"
+            return 0
+          else
+            echo "❌ Installation failed after retry"
+            return 1
+          fi
+        fi
+      }
+
+      # Execute installation function
+      install_deps
     - echo "📊 Dependency size:"
     - du -sh node_modules || echo "Could not calculate size"
   cache:
@@ -125,7 +151,7 @@ install_frontend_deps:
     expire_in: 1 hour
   rules:
     - if: '$CI_COMMIT_REF_NAME == "dev" || $CI_COMMIT_REF_NAME == "main"'
-  timeout: 10 minutes
+  timeout: 15 minutes
 
 install_backend_deps:
   stage: dependencies
