@@ -413,84 +413,84 @@ build_db_image:
     - if: '$CI_COMMIT_REF_NAME == "dev" || $CI_COMMIT_REF_NAME == "main"'
   timeout: 10 minutes
 
-deploy_staging:
-  stage: deploy
-  <<: *alpine_template
-  environment:
-    name: staging
-    url: https://staging.ems-platform.com
-  dependencies:
-    - build_frontend_image
-    - build_backend_image
-    - build_db_image
-  script:
-    - echo "🚀 AUTO Deploying to pre-production..."
-    - echo "🔍 Deployment environment:"
-    - echo "Server: $STAGING_DEPLOY_SERVER"
-    - echo "Path: $STAGING_DEPLOY_PATH"
-    - |
-      ssh -o StrictHostKeyChecking=no -o ConnectTimeout=30 $STAGING_DEPLOY_USER@$STAGING_DEPLOY_SERVER "
-        echo '📋 Current directory:'
-        pwd
-        echo '🔍 Checking deployment path...'
-        cd $STAGING_DEPLOY_PATH || exit 1
-        echo '🔄 Pulling latest images...'
-        docker-compose pull --quiet
-        echo '🚀 Starting services...'
-        docker-compose up -d --no-build
-        echo '⏳ Waiting for services to be healthy...'
-        sleep 15
-        echo '🔍 Service status:'
-        docker-compose ps
-        echo '🔍 Recent logs:'
-        docker-compose logs --tail=20
-        echo '✅ Pre-production deployed successfully'"
-    - echo "✅ Pre-production deployment completed"
-  rules:
-    - if: '$CI_COMMIT_REF_NAME == "dev"'
-  timeout: 10 minutes
+# deploy_staging:
+#   stage: deploy
+#   <<: *alpine_template
+#   environment:
+#     name: staging
+#     url: https://staging.ems-platform.com
+#   dependencies:
+#     - build_frontend_image
+#     - build_backend_image
+#     - build_db_image
+#   script:
+#     - echo "🚀 AUTO Deploying to pre-production..."
+#     - echo "🔍 Deployment environment:"
+#     - echo "Server: $STAGING_DEPLOY_SERVER"
+#     - echo "Path: $STAGING_DEPLOY_PATH"
+#     - |
+#       ssh -o StrictHostKeyChecking=no -o ConnectTimeout=30 $STAGING_DEPLOY_USER@$STAGING_DEPLOY_SERVER "
+#         echo '📋 Current directory:'
+#         pwd
+#         echo '🔍 Checking deployment path...'
+#         cd $STAGING_DEPLOY_PATH || exit 1
+#         echo '🔄 Pulling latest images...'
+#         docker-compose pull --quiet
+#         echo '🚀 Starting services...'
+#         docker-compose up -d --no-build
+#         echo '⏳ Waiting for services to be healthy...'
+#         sleep 15
+#         echo '🔍 Service status:'
+#         docker-compose ps
+#         echo '🔍 Recent logs:'
+#         docker-compose logs --tail=20
+#         echo '✅ Pre-production deployed successfully'"
+#     - echo "✅ Pre-production deployment completed"
+#   rules:
+#     - if: '$CI_COMMIT_REF_NAME == "dev"'
+#   timeout: 10 minutes
 
-deploy_production:
-  stage: deploy
-  <<: *alpine_template
-  environment:
-    name: production
-    url: https://ems-platform.com
-  dependencies:
-    - build_frontend_image
-    - build_backend_image
-    - build_db_image
-  script:
-    - echo "🚀 MANUAL Deploying to production..."
-    - echo "🔍 Deployment environment:"
-    - echo "Server: $DEPLOY_SERVER"
-    - echo "Path: $DEPLOY_PATH"
-    - |
-      ssh -o StrictHostKeyChecking=no -o ConnectTimeout=30 $DEPLOY_USER@$DEPLOY_SERVER "
-        echo '📋 Current directory:'
-        pwd
-        echo '🔍 Checking deployment path...'
-        cd $DEPLOY_PATH || exit 1
-        echo '🔄 Pulling latest images...'
-        docker-compose pull --quiet
-        echo '🚀 Starting services...'
-        docker-compose up -d --no-build
-        echo '⏳ Waiting for services to be healthy...'
-        sleep 20
-        echo '🔍 Service status:'
-        docker-compose ps
-        echo '🔍 Recent logs:'
-        docker-compose logs --tail=20
-        echo '✅ Production deployed successfully'"
-    - echo "🔄 Health check..."
-    - sleep 30
-    - echo "🔍 Testing production health endpoint..."
-    - curl -f --retry 3 --retry-delay 5 https://ems-platform.com/api/health || exit 1
-    - echo "✅ Production deployment completed"
-  rules:
-    - if: '$CI_COMMIT_REF_NAME == "main"'
-      when: manual
-  timeout: 15 minutes
+# deploy_production:
+#   stage: deploy
+#   <<: *alpine_template
+#   environment:
+#     name: production
+#     url: https://ems-platform.com
+#   dependencies:
+#     - build_frontend_image
+#     - build_backend_image
+#     - build_db_image
+#   script:
+#     - echo "🚀 MANUAL Deploying to production..."
+#     - echo "🔍 Deployment environment:"
+#     - echo "Server: $DEPLOY_SERVER"
+#     - echo "Path: $DEPLOY_PATH"
+#     - |
+#       ssh -o StrictHostKeyChecking=no -o ConnectTimeout=30 $DEPLOY_USER@$DEPLOY_SERVER "
+#         echo '📋 Current directory:'
+#         pwd
+#         echo '🔍 Checking deployment path...'
+#         cd $DEPLOY_PATH || exit 1
+#         echo '🔄 Pulling latest images...'
+#         docker-compose pull --quiet
+#         echo '🚀 Starting services...'
+#         docker-compose up -d --no-build
+#         echo '⏳ Waiting for services to be healthy...'
+#         sleep 20
+#         echo '🔍 Service status:'
+#         docker-compose ps
+#         echo '🔍 Recent logs:'
+#         docker-compose logs --tail=20
+#         echo '✅ Production deployed successfully'"
+#     - echo "🔄 Health check..."
+#     - sleep 30
+#     - echo "🔍 Testing production health endpoint..."
+#     - curl -f --retry 3 --retry-delay 5 https://ems-platform.com/api/health || exit 1
+#     - echo "✅ Production deployment completed"
+#   rules:
+#     - if: '$CI_COMMIT_REF_NAME == "main"'
+#       when: manual
+#   timeout: 15 minutes
 
 cleanup_docker:
   stage: clean
