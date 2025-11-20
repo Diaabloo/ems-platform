@@ -7,6 +7,7 @@ stages:
   - clean
 
 variables:
+  GIT_CLEAN_FLAGS: -ffdx -e client/node_modules/ -e backend/node_modules/
   DOCKER_TLS_CERTDIR: ""
   DOCKER_BUILDKIT: "1"
   NODE_VERSION: "20"
