@@ -217,7 +217,10 @@ audit_backend:
     - echo "🔒 Backend security audit..."
     - cd backend
     - echo "📋 Audit report:"
-    - npm audit --audit-level high --production --json > audit-backend.json 2>/dev/null || echo '{"vulnerabilities": {}}' > audit-backend.json
+    - |
+      # Try audit, fallback JSON if audit fails
+      npm audit --audit-level high --production --json > audit-backend.json 2>/dev/null \
+      || echo '{"vulnerabilities": {}}' > audit-backend.json
     - echo "✅ Backend audit completed"
   artifacts:
     paths:
@@ -228,6 +231,7 @@ audit_backend:
     - if: '$CI_COMMIT_REF_NAME == "dev" || $CI_COMMIT_REF_NAME == "main"'
   allow_failure: true
   timeout: 10 minutes
+
 
 validate_prisma_schema:
   stage: security
