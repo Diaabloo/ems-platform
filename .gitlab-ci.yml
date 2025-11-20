@@ -20,7 +20,6 @@ variables:
   COMMIT_TAG: "sha-${CI_COMMIT_SHORT_SHA}"
   LATEST_TAG: "latest"
 
-
 .docker_template: &docker_template
   image: docker:24
   variables:
@@ -168,7 +167,6 @@ install_backend_deps:
     - if: '$CI_COMMIT_REF_NAME == "dev" || $CI_COMMIT_REF_NAME == "main"'
   timeout: 10 minutes
 
-
 audit_frontend:
   stage: security
   <<: *node_template
@@ -229,7 +227,6 @@ validate_prisma_schema:
   rules:
     - if: '$CI_COMMIT_REF_NAME == "dev" || $CI_COMMIT_REF_NAME == "main"'
   timeout: 10 minutes
-
 
 validate_frontend:
   stage: validate_test
@@ -337,7 +334,6 @@ test_backend:
   allow_failure: true
   timeout: 10 minutes
 
-
 build_frontend_image:
   stage: build
   <<: *docker_template
@@ -413,7 +409,6 @@ build_db_image:
   rules:
     - if: '$CI_COMMIT_REF_NAME == "dev" || $CI_COMMIT_REF_NAME == "main"'
   timeout: 10 minutes
-
 
 deploy_staging:
   stage: deploy
@@ -493,7 +488,6 @@ deploy_production:
     - if: '$CI_COMMIT_REF_NAME == "main"'
       when: manual
   timeout: 15 minutes
-
 
 cleanup_docker:
   stage: clean
