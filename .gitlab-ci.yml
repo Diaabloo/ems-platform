@@ -77,6 +77,8 @@ variables:
     - echo "🔧 Node.js + PostgreSQL Environment Setup"
     - node --version
     - npm --version
+    - echo "📦 Installing netcat for PostgreSQL connection testing..."
+    - apt-get update && apt-get install -y netcat-openbsd
     - echo "🔄 Waiting for PostgreSQL to be ready..."
     - |
       for i in {1..60}; do
