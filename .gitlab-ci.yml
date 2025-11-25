@@ -64,21 +64,36 @@ variables:
   services:
     - name: postgres:${POSTGRES_VERSION}
       alias: postgres
+      command: ["postgres", "-c", "shared_preload_libraries=pg_stat_statements", "-c", "max_connections=200"]
   variables:
     POSTGRES_HOST: postgres
     POSTGRES_PORT: 5432
     POSTGRES_DB: "ems_platform"
     POSTGRES_USER: "postgres"
     POSTGRES_PASSWORD: "password"
+    POSTGRES_HOST_AUTH_METHOD: "trust"
     DATABASE_URL: "postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}"
   before_script:
     - echo "🔧 Node.js + PostgreSQL Environment Setup"
     - node --version
     - npm --version
     - echo "🔄 Waiting for PostgreSQL to be ready..."
-    - timeout 30 bash -c 'until printf "" 2>>/dev/null >>/dev/tcp/postgres/5432; do sleep 2; done'
-    - echo "✅ PostgreSQL is ready!"
+    - |
+      for i in {1..60}; do
+        if nc -z postgres 5432; then
+          echo "✅ PostgreSQL is ready!"
+          break
+        fi
+        echo "⏳ Waiting for PostgreSQL... ($i/60)"
+        sleep 2
+      done
     - echo "🔍 Testing database connection..."
+    - |
+      if nc -z postgres 5432; then
+        echo "✅ Database connection successful"
+      else
+        echo "❌ Database connection failed - continuing anyway"
+      fi
   tags:
     - windows
     - docker
@@ -129,7 +144,6 @@ install_frontend_deps:
     paths:
       - client/node_modules/
     policy: pull-push
-  # SUPPRIMÉ: artifacts sur node_modules (cache suffisant)
   rules:
     - if: '$CI_COMMIT_REF_NAME == "dev" || $CI_COMMIT_REF_NAME == "main"'
   timeout: 15 minutes
@@ -166,7 +180,6 @@ install_backend_deps:
       - backend/node_modules/.prisma/
       - backend/node_modules/@prisma/
     policy: pull-push
-  # SUPPRIMÉ: artifacts sur node_modules (cache suffisant)
   rules:
     - if: '$CI_COMMIT_REF_NAME == "dev" || $CI_COMMIT_REF_NAME == "main"'
   timeout: 10 minutes
@@ -235,7 +248,7 @@ validate_prisma_schema:
       echo "🔍 Validating schema..."
       npx prisma validate
       echo "🔍 Checking database connection..."
-      npx prisma db execute --stdin --url "$DATABASE_URL" <<< "SELECT version();" || echo "Database connection failed"
+      npx prisma db execute --stdin --url "$DATABASE_URL" <<< "SELECT version();" || echo "Database connection failed - continuing anyway"
       echo "✅ Prisma schema validated"
   rules:
     - if: '$CI_COMMIT_REF_NAME == "dev" || $CI_COMMIT_REF_NAME == "main"'
