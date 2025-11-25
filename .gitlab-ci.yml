@@ -212,7 +212,6 @@ audit_backend:
     - cd backend
     - echo "📋 Audit report:"
     - npm audit --audit-level high --production --json > audit-backend.json 2>/dev/null || true
-    - if [ ! -s audit-backend.json ]; then echo "{\"vulnerabilities\": {}}" > audit-backend.json; fi
     - echo "✅ Backend audit completed"
   artifacts:
     paths:
