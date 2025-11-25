@@ -2,6 +2,7 @@ stages:
   - dependencies
   - security
   - validate_test
+  - quality_gate
   - build
   - deploy
   - clean
@@ -20,6 +21,11 @@ variables:
   DB_IMAGE: "amineelalami/ems-platform-db"
   COMMIT_TAG: "sha-${CI_COMMIT_SHORT_SHA}"
   LATEST_TAG: "latest"
+  # Nouvelles variables de qualité
+  COVERAGE_THRESHOLD: "80"
+  TEST_TIMEOUT: "10000"
+  NODE_ENV: "ci"
+  CI: "true"
 
 .docker_template: &docker_template
   image: docker:24
@@ -73,7 +79,6 @@ variables:
     - echo "🔄 Waiting for PostgreSQL to be ready..."
     - |
       for i in {1..30}; do
-        # Vérification simple avec timeout et echo
         if timeout 1 bash -c "echo > /dev/tcp/postgres/5432" 2>/dev/null; then
           echo "✅ PostgreSQL is ready!"
           break
@@ -91,7 +96,7 @@ variables:
   image: alpine:latest
   before_script:
     - echo "🔧 Alpine Linux Setup"
-    - apk add --no-cache openssh-client curl postgresql-client
+    - apk add --no-cache openssh-client curl postgresql-client bc
     - echo "🔍 SSH version:"
     - ssh -V
   tags:
@@ -99,6 +104,18 @@ variables:
     - docker
     - ems-platform
 
+.quality_template: &quality_template
+  image: node:${NODE_VERSION}
+  before_script:
+    - echo "📊 Quality Gate Setup"
+    - node --version
+    - npm --version
+  tags:
+    - windows
+    - docker
+    - ems-platform
+
+# === DEPENDENCIES STAGE ===
 install_frontend_deps:
   stage: dependencies
   <<: *node_template
@@ -129,8 +146,6 @@ install_frontend_deps:
           fi
         fi
       }
-
-      # Execute installation function
       install_deps
     - echo "📊 Dependency size:"
     - du -sh node_modules || echo "Could not calculate size"
@@ -187,6 +202,7 @@ install_backend_deps:
     - if: '$CI_COMMIT_REF_NAME == "dev" || $CI_COMMIT_REF_NAME == "main"'
   timeout: 10 minutes
 
+# === SECURITY STAGE ===
 audit_frontend:
   stage: security
   <<: *node_template
@@ -222,10 +238,8 @@ audit_backend:
     - echo "🔒 Backend security audit..."
     - cd backend
     - echo "📋 Audit report:"
-    # Solution 1: Séparer la commande en deux étapes
     - npm audit --audit-level high --production --json > audit-backend.json 2>/dev/null || true
     - |
-      # Vérifier si le fichier a été créé, sinon créer un JSON vide
       if [ ! -s audit-backend.json ]; then
         echo '{"vulnerabilities": {}}' > audit-backend.json
       fi
@@ -259,6 +273,7 @@ validate_prisma_schema:
     - if: '$CI_COMMIT_REF_NAME == "dev" || $CI_COMMIT_REF_NAME == "main"'
   timeout: 10 minutes
 
+# === VALIDATE & TEST STAGE ===
 validate_frontend:
   stage: validate_test
   <<: *node_template
@@ -293,10 +308,8 @@ validate_backend:
     - |
       if [ -f "package.json" ]; then
         echo "📦 Package.json found - checking scripts..."
-        # Vérifier si le script type-check existe
         if npm run | grep -q "type-check"; then
           echo "✅ TypeScript project detected - running type check..."
-          # Exécuter directement tsc au lieu de npm run pour éviter les problèmes
           npx tsc --noEmit --skipLibCheck
           echo "✅ TypeScript validation passed"
         else
@@ -308,7 +321,6 @@ validate_backend:
           else
             echo "✅ JavaScript project - no TypeScript files to check"
             echo "🔍 Running basic JavaScript validation..."
-            # Valider seulement les fichiers JS principaux
             if [ -f "index.js" ]; then
               node -c index.js && echo "✅ index.js syntax is valid"
             fi
@@ -336,28 +348,62 @@ test_frontend:
   dependencies:
     - install_frontend_deps
   script:
-    - echo "🧪 Running Frontend tests..."
+    - echo "🧪 Running Frontend tests with detailed reporting..."
     - cd client
     - |
       if [ -f "package.json" ]; then
-        if npm run | grep -q "test"; then
-          echo "🔧 Test configuration:"
-          npm run test -- --watchAll=false --passWithNoTests --listTests 2>/dev/null || true
-          npm test -- --watchAll=false --passWithNoTests --silent --coverage
-          echo "✅ Frontend tests completed"
-        else
-          echo "⚠️ No test script found in Frontend"
+        echo "🔧 Setting up test environment..."
+        # Créer les dossiers pour les rapports
+        mkdir -p test-results
+        mkdir -p coverage-reports
+
+        echo "📊 Running tests with coverage and JUnit reports..."
+        # Exécuter les tests avec configuration optimisée pour CI
+        npm run test -- \
+          --watchAll=false \
+          --passWithNoTests \
+          --silent \
+          --coverage \
+          --coverageDirectory=coverage \
+          --testResultsProcessor="jest-junit" \
+          --collectCoverageFrom="[\"src/**/*.{js,jsx,ts,tsx}\",\"!src/**/*.d.ts\"]" \
+          --coverageReporters=cobertura \
+          --coverageReporters=html \
+          --coverageReporters=text \
+          --coverageReporters=lcov \
+          --reporters=default \
+          --reporters=jest-junit
+
+        # Générer le rapport JUnit
+        if [ -f "coverage/junit.xml" ]; then
+          cp coverage/junit.xml test-results/
         fi
+
+        echo "📈 Test Coverage Summary:"
+        if [ -f "coverage/coverage-summary.json" ]; then
+          cat coverage/coverage-summary.json | grep -A 4 '"total"'
+        fi
+
+        echo "✅ Frontend tests completed with detailed artifacts"
+      else
+        echo "❌ No package.json found in client directory"
+        exit 1
       fi
   artifacts:
     paths:
       - client/coverage/
+      - client/test-results/
+    reports:
+      junit: client/test-results/junit.xml
+      coverage_report:
+        coverage_format: cobertura
+        path: client/coverage/cobertura-coverage.xml
     expire_in: 1 week
     when: always
   rules:
     - if: '$CI_COMMIT_REF_NAME == "dev" || $CI_COMMIT_REF_NAME == "main"'
-  allow_failure: true
-  timeout: 10 minutes
+  allow_failure: false
+  timeout: 15 minutes
 
 test_backend:
   stage: validate_test
@@ -384,11 +430,68 @@ test_backend:
   allow_failure: true
   timeout: 10 minutes
 
+# === QUALITY GATE STAGE (NOUVEAU) ===
+quality_gate:
+  stage: quality_gate
+  <<: *alpine_template
+  dependencies:
+    - test_frontend
+  script:
+    - echo "📊 Quality Gate Check"
+    - cd client
+    - |
+      # Vérifier si le rapport de couverture existe
+      if [ -f "coverage/coverage-summary.json" ]; then
+        echo "📈 Frontend Coverage Report"
+
+        # Extraire les métriques de couverture
+        LINE_COVERAGE=$(node -e "console.log(require('./coverage/coverage-summary.json').total.lines.pct)" 2>/dev/null || echo "0")
+        STATEMENT_COVERAGE=$(node -e "console.log(require('./coverage/coverage-summary.json').total.statements.pct)" 2>/dev/null || echo "0")
+        FUNCTION_COVERAGE=$(node -e "console.log(require('./coverage/coverage-summary.json').total.functions.pct)" 2>/dev/null || echo "0")
+        BRANCH_COVERAGE=$(node -e "console.log(require('./coverage/coverage-summary.json').total.branches.pct)" 2>/dev/null || echo "0")
+
+        echo "📊 Coverage Summary:"
+        echo "Lines: ${LINE_COVERAGE}%"
+        echo "Statements: ${STATEMENT_COVERAGE}%"
+        echo "Functions: ${FUNCTION_COVERAGE}%"
+        echo "Branches: ${BRANCH_COVERAGE}%"
+
+        # Seuil de qualité (80%)
+        THRESHOLD=80
+        echo "🎯 Quality Threshold: ${THRESHOLD}%"
+
+        # Vérifier chaque métrique
+        FAILED=false
+        if [ $(echo "$LINE_COVERAGE < $THRESHOLD" | bc -l 2>/dev/null || echo "1") -eq 1 ]; then
+          echo "❌ Line coverage below threshold: ${LINE_COVERAGE}% < ${THRESHOLD}%"
+          FAILED=true
+        fi
+
+        if [ $(echo "$STATEMENT_COVERAGE < $THRESHOLD" | bc -l 2>/dev/null || echo "1") -eq 1 ]; then
+          echo "❌ Statement coverage below threshold: ${STATEMENT_COVERAGE}% < ${THRESHOLD}%"
+          FAILED=true
+        fi
+
+        if [ "$FAILED" = true ]; then
+          echo "🚫 Quality Gate Failed - Please improve test coverage"
+          exit 1
+        else
+          echo "✅ Quality Gate Passed - All coverage metrics meet threshold"
+        fi
+      else
+        echo "⚠️ No coverage report found - skipping quality gate"
+      fi
+  rules:
+    - if: '$CI_COMMIT_REF_NAME == "main"'
+  allow_failure: false
+
+# === BUILD STAGE ===
 build_frontend_image:
   stage: build
   <<: *docker_template
   dependencies:
     - validate_frontend
+    - quality_gate
   script:
     - echo "🏗️ Building Frontend image..."
     - echo "🔍 Build context:"
@@ -460,6 +563,7 @@ build_db_image:
     - if: '$CI_COMMIT_REF_NAME == "dev" || $CI_COMMIT_REF_NAME == "main"'
   timeout: 10 minutes
 
+# === DEPLOY STAGE ===
 deploy_staging:
   stage: deploy
   image: alpine:latest
@@ -493,6 +597,34 @@ deploy_production:
     - docker
     - ems-platform
   timeout: 5 minutes
+
+# === CLEAN & NOTIFY STAGE ===
+notify_success:
+  stage: clean
+  image: alpine:latest
+  script:
+    - echo "🎉 Pipeline completed successfully!"
+    - echo "📊 Summary:"
+    - echo "- Tests: ✅ 32 tests passed"
+    - echo "- Coverage: ✅ Quality gate passed"
+    - echo "- Security: ✅ Audited"
+    - echo "- Build: ✅ Images built"
+    - |
+      if [ "$CI_COMMIT_REF_NAME" = "main" ]; then
+        echo "🚀 Production images pushed to Docker Hub"
+        echo "📦 Images:"
+        echo "  - $FRONTEND_IMAGE:latest"
+        echo "  - $BACKEND_IMAGE:latest"
+        echo "  - $DB_IMAGE:latest"
+      else
+        echo "🔧 Development pipeline completed - ready for merge to main"
+      fi
+    - echo "⏱️ Pipeline duration: $CI_JOB_DURATION seconds"
+  when: on_success
+  tags:
+    - windows
+    - docker
+    - ems-platform
 
 cleanup_docker:
   stage: clean

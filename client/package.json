@@ -7,7 +7,11 @@
     "dev": "next dev",
     "lint": "next lint",
     "start": "next start",
-    "test": "echo 'No tests defined' || exit 0"
+    "test": "jest --runInBand",
+    "test:watch": "jest --watch",
+    "test:coverage": "jest --coverage",
+    "test:ci": "jest --runInBand --coverage --coverageReporters=cobertura --coverageReporters=html --coverageReporters=text --reporters=default --reporters=jest-junit --testResultsProcessor=jest-junit",
+    "test:junit": "jest --reporters=default --reporters=jest-junit"
   },
   "dependencies": {
     "@hookform/resolvers": "^3.10.0",
@@ -67,10 +71,20 @@
     "zustand": "latest"
   },
   "devDependencies": {
+    "@babel/preset-env": "^7.28.5",
+    "@babel/preset-react": "^7.28.5",
+    "@jest/globals": "^30.2.0",
     "@tailwindcss/postcss": "^4.1.9",
+    "@testing-library/jest-dom": "^6.9.1",
+    "@testing-library/react": "^16.3.0",
     "@types/node": "^22",
     "@types/react": "^18.3.1",
     "@types/react-dom": "^18.3.1",
+    "babel-jest": "^30.2.0",
+    "identity-obj-proxy": "^3.0.0",
+    "jest": "^30.2.0",
+    "jest-environment-jsdom": "^30.2.0",
+    "jest-junit": "^16.0.0",
     "postcss": "^8.5",
     "tailwindcss": "^4.1.9",
     "tw-animate-css": "1.3.3",
