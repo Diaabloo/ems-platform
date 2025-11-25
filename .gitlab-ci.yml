@@ -212,9 +212,7 @@ audit_backend:
     - cd backend
     - echo "📋 Audit report:"
     - npm audit --audit-level high --production --json > audit-backend.json 2>/dev/null || true
-    - if [ ! -s audit-backend.json ]; then
-        echo "{\"vulnerabilities\": {}}" > audit-backend.json
-      fi
+    - if [ ! -s audit-backend.json ]; then echo "{\"vulnerabilities\": {}}" > audit-backend.json; fi
     - echo "✅ Backend audit completed"
   artifacts:
     paths:
@@ -325,7 +323,7 @@ test_frontend:
     - mkdir -p test-results
     - mkdir -p coverage-reports
     - echo "📊 Running tests with coverage and JUnit reports..."
-    - npm test -- --watchAll=false --passWithNoTests --silent --coverage --coverageDirectory=coverage --testResultsProcessor="jest-junit" --collectCoverageFrom="[\"src/**/*.{js,jsx,ts,tsx}\",\"!src/**/*.d.ts\"]" --coverageReporters=cobertura --coverageReporters=html --coverageReporters=text --coverageReporters=lcov --reporters=default --reporters=jest-junit
+    - npm test -- --watchAll=false --passWithNoTests --silent --coverage --coverageDirectory=coverage --testResultsProcessor=jest-junit --collectCoverageFrom="[\"src/**/*.{js,jsx,ts,tsx}\",\"!src/**/*.d.ts\"]" --coverageReporters=cobertura --coverageReporters=html --coverageReporters=text --coverageReporters=lcov --reporters=default --reporters=jest-junit
     - if [ -f "coverage/junit.xml" ]; then cp coverage/junit.xml test-results/; fi
     - echo "📈 Test Coverage Summary:"
     - if [ -f "coverage/coverage-summary.json" ]; then cat coverage/coverage-summary.json | grep -A 4 '"total"'; fi
