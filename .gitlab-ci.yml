@@ -112,26 +112,24 @@ install_frontend_deps:
   stage: dependencies
   <<: *node_template
   script:
-    - echo "📦 Installing Frontend dependencies..."
-    - cd client
-    - echo "🔍 Project structure:"
-    - ls -la
-    - echo "🗑️ Cleaning npm cache..."
-    - npm cache clean --force
-    - echo "📥 Attempting npm installation..."
-    - npm install --no-audit --no-fund --loglevel=verbose
-    - echo "✅ Frontend dependencies installed successfully"
-    - echo "📊 Dependency size:"
-    - du -sh node_modules || echo "Could not calculate size"
+    - |
+      echo "📦 Installing Frontend dependencies..."
+      cd client
+      echo "🔍 Project structure:"
+      ls -la
+      echo "🗑️ Cleaning npm cache..."
+      npm cache clean --force
+      echo "📥 Attempting npm installation..."
+      npm install --no-audit --no-fund --loglevel=verbose
+      echo "✅ Frontend dependencies installed successfully"
+      echo "📊 Dependency size:"
+      du -sh node_modules || echo "Could not calculate size"
   cache:
     key: "frontend-npm-${CI_COMMIT_REF_SLUG}"
     paths:
       - client/node_modules/
     policy: pull-push
-  artifacts:
-    paths:
-      - client/node_modules/
-    expire_in: 1 hour
+  # SUPPRIMÉ: artifacts sur node_modules (cache suffisant)
   rules:
     - if: '$CI_COMMIT_REF_NAME == "dev" || $CI_COMMIT_REF_NAME == "main"'
   timeout: 15 minutes
@@ -168,10 +166,7 @@ install_backend_deps:
       - backend/node_modules/.prisma/
       - backend/node_modules/@prisma/
     policy: pull-push
-  artifacts:
-    paths:
-      - backend/node_modules/
-    expire_in: 1 hour
+  # SUPPRIMÉ: artifacts sur node_modules (cache suffisant)
   rules:
     - if: '$CI_COMMIT_REF_NAME == "dev" || $CI_COMMIT_REF_NAME == "main"'
   timeout: 10 minutes
