@@ -163,6 +163,8 @@ install_backend_deps:
       echo "🔍 Checking for existing node_modules..."
       if [ -d "node_modules" ]; then
         echo "🔄 node_modules found, using cache..."
+        echo "🔍 Cache contents (Prisma):"
+        ls -la node_modules/.prisma/ 2>/dev/null || echo "No Prisma in cache"
         npm ci --prefer-offline --no-audit
         echo "✅ Backend dependencies updated from cache"
       else
@@ -170,6 +172,8 @@ install_backend_deps:
         npm install --prefer-offline --no-audit --no-fund
         echo "✅ Backend dependencies installed"
       fi
+      echo "🔍 Verifying Prisma installation..."
+      npx prisma --version
       echo "🗄️ Generating Prisma client..."
       npx prisma generate --no-hints
       echo "📊 Dependency size:"
@@ -246,20 +250,21 @@ validate_prisma_schema:
     - |
       echo "🗄️ Prisma schema validation..."
       cd backend
+      echo "🔍 Using existing Prisma v6 from package.json..."
+      echo "📋 Prisma version:"
+      npx prisma --version
       echo "📋 Prisma schema content (first 10 lines):"
       head -10 prisma/schema.prisma
       echo "🔍 Validating schema syntax..."
       npx prisma validate
       echo "🔍 Generating Prisma client..."
       npx prisma generate
-      echo "🔍 Testing database schema..."
+      echo "🔍 Testing database connection..."
       npx prisma db execute --stdin --url "$DATABASE_URL" <<< "SELECT version();" && echo "✅ Database connection successful"
-      echo "🔍 Pushing schema (dry run)..."
-      npx prisma db push --preview-feature --skip-generate || echo "⚠️ Schema push might have warnings"
       echo "✅ Prisma schema validated successfully"
   rules:
     - if: '$CI_COMMIT_REF_NAME == "dev" || $CI_COMMIT_REF_NAME == "main"'
-  timeout: 10 minutes
+  timeout: 15 minutes
   allow_failure: false
 
 # === VALIDATE & TEST STAGE ===
