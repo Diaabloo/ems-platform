@@ -173,9 +173,9 @@ install_backend_deps:
         echo "✅ Backend dependencies installed"
       fi
       echo "🔍 Verifying Prisma installation..."
-      ./node_modules/.bin/prisma --version
+      npx prisma@6.18.0 --version
       echo "🗄️ Generating Prisma client..."
-      ./node_modules/.bin/prisma generate --no-hints
+      npx prisma@6.18.0 generate --no-hints
       echo "📊 Dependency size:"
       du -sh node_modules || echo "Could not calculate size"
       echo "🔍 Prisma client verification:"
@@ -187,9 +187,15 @@ install_backend_deps:
       - backend/node_modules/.prisma/
       - backend/node_modules/@prisma/
     policy: pull-push
+  artifacts:
+    paths:
+      - backend/node_modules/
+      - backend/node_modules/.prisma/
+      - backend/node_modules/@prisma/
+    expire_in: 1 hour
   rules:
     - if: '$CI_COMMIT_REF_NAME == "dev" || $CI_COMMIT_REF_NAME == "main"'
-  timeout: 10 minutes
+  timeout: 15 minutes
 
 # === SECURITY STAGE ===
 audit_frontend:
@@ -250,17 +256,27 @@ validate_prisma_schema:
     - |
       echo "🗄️ Prisma schema validation..."
       cd backend
-      echo "🔍 Using local Prisma binary..."
+      echo "🔍 Using artifacts from install_backend_deps..."
+
+      echo "📋 Verifying node_modules exists..."
+      ls -la node_modules/.bin/prisma && echo "✅ Prisma binary found" || echo "❌ Prisma binary missing"
+
       echo "📋 Prisma version:"
-      ./node_modules/.bin/prisma --version
+      ./node_modules/.bin/prisma --version || npx prisma@6.18.0 --version
+
       echo "📋 Prisma schema content (first 10 lines):"
       head -10 prisma/schema.prisma
+
       echo "🔍 Validating schema syntax..."
-      ./node_modules/.bin/prisma validate
+      ./node_modules/.bin/prisma validate || npx prisma@6.18.0 validate
+
       echo "🔍 Generating Prisma client..."
-      ./node_modules/.bin/prisma generate
+      ./node_modules/.bin/prisma generate || npx prisma@6.18.0 generate
+
       echo "🔍 Testing database connection..."
-      ./node_modules/.bin/prisma db execute --stdin --url "$DATABASE_URL" <<< "SELECT version();" && echo "✅ Database connection successful"
+      ./node_modules/.bin/prisma db execute --stdin --url "$DATABASE_URL" <<< "SELECT version();" || npx prisma@6.18.0 db execute --stdin --url "$DATABASE_URL" <<< "SELECT version();"
+      echo "✅ Database connection successful"
+
       echo "✅ Prisma schema validated successfully"
   rules:
     - if: '$CI_COMMIT_REF_NAME == "dev" || $CI_COMMIT_REF_NAME == "main"'
