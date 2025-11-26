@@ -173,9 +173,9 @@ install_backend_deps:
         echo "✅ Backend dependencies installed"
       fi
       echo "🔍 Verifying Prisma installation..."
-      npx prisma --version
+      ./node_modules/.bin/prisma --version
       echo "🗄️ Generating Prisma client..."
-      npx prisma generate --no-hints
+      ./node_modules/.bin/prisma generate --no-hints
       echo "📊 Dependency size:"
       du -sh node_modules || echo "Could not calculate size"
       echo "🔍 Prisma client verification:"
@@ -250,27 +250,17 @@ validate_prisma_schema:
     - |
       echo "🗄️ Prisma schema validation..."
       cd backend
-      echo "🔍 Using direct Prisma binary path..."
-
-      # Utiliser le chemin direct vers le binaire Prisma
-      PRISMA_BIN="./node_modules/.bin/prisma"
-
+      echo "🔍 Using local Prisma binary..."
       echo "📋 Prisma version:"
-      $PRISMA_BIN --version
-
+      ./node_modules/.bin/prisma --version
       echo "📋 Prisma schema content (first 10 lines):"
       head -10 prisma/schema.prisma
-
       echo "🔍 Validating schema syntax..."
-      $PRISMA_BIN validate
-
+      ./node_modules/.bin/prisma validate
       echo "🔍 Generating Prisma client..."
-      $PRISMA_BIN generate
-
+      ./node_modules/.bin/prisma generate
       echo "🔍 Testing database connection..."
-      $PRISMA_BIN db execute --stdin --url "$DATABASE_URL" <<< "SELECT version();"
-      echo "✅ Database connection successful"
-
+      ./node_modules/.bin/prisma db execute --stdin --url "$DATABASE_URL" <<< "SELECT version();" && echo "✅ Database connection successful"
       echo "✅ Prisma schema validated successfully"
   rules:
     - if: '$CI_COMMIT_REF_NAME == "dev" || $CI_COMMIT_REF_NAME == "main"'
