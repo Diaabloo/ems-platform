@@ -1,14 +1,17 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
-  eslint: {
-    ignoreDuringBuilds: true,
-  },
   typescript: {
+    // ✅ Ignorer les erreurs TypeScript pendant le build
     ignoreBuildErrors: true,
   },
-  images: {
-    unoptimized: true,
+  eslint: {
+    // ✅ Ignorer les erreurs ESLint pendant le build
+    ignoreDuringBuilds: true,
   },
+  // ✅ Activer SWC au lieu de Babel
+  swcMinify: true,
+  // ✅ Désactiver la télémétrie
+  telemetry: false,
 }
 
 export default nextConfig
