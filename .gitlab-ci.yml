@@ -338,30 +338,26 @@ validate_backend:
       echo "🔍 Project structure:"
       ls -la
 
-      # Vérifier que tsconfig.json existe maintenant
-      if [ -f "tsconfig.json" ]; then
-        echo "✅ tsconfig.json found - TypeScript project"
-
-        # Validation TypeScript
-        echo "🔍 TypeScript compilation check..."
-        if [ -f "node_modules/.bin/tsc" ]; then
-          echo "🔍 Using local TypeScript compiler"
-          ./node_modules/.bin/tsc --noEmit --skipLibCheck
-        else
-          echo "🔍 Using npx TypeScript"
-          npx tsc --noEmit --skipLibCheck
-        fi
-        echo "✅ TypeScript validation passed"
-
+      # Validation TypeScript pour le code source principal
+      echo "🔍 TypeScript compilation check for main source..."
+      if [ -f "node_modules/.bin/tsc" ]; then
+        ./node_modules/.bin/tsc --noEmit --skipLibCheck
       else
-        echo "❌ tsconfig.json not found - this should not happen"
-        exit 1
+        npx tsc --noEmit --skipLibCheck
       fi
+      echo "✅ TypeScript validation passed"
 
-      # Validation JavaScript de base
-      echo "🔍 JavaScript syntax validation..."
-      if [ -f "index.js" ]; then
-        node -c index.js && echo "✅ index.js syntax valid" || echo "❌ index.js syntax error"
+      # Validation spécifique pour les scripts
+      echo "🔍 TypeScript check for scripts..."
+      if [ -f "tsconfig.scripts.json" ]; then
+        if [ -f "node_modules/.bin/tsc" ]; then
+          ./node_modules/.bin/tsc --project tsconfig.scripts.json --noEmit --skipLibCheck
+        else
+          npx tsc --project tsconfig.scripts.json --noEmit --skipLibCheck
+        fi
+        echo "✅ Scripts TypeScript validation passed"
+      else
+        echo "ℹ️ No scripts configuration found, skipping scripts validation"
       fi
 
       echo "✅ Backend validation completed successfully"
