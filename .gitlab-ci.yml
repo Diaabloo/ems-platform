@@ -335,29 +335,33 @@ validate_backend:
       echo "🔍 Backend validation..."
       cd backend
 
-      # Validation JavaScript uniquement - ignorer TypeScript
-      echo "🔍 JavaScript syntax validation..."
+      echo "🔍 Project structure:"
+      ls -la
 
-      # Vérifier le fichier principal
-      if [ -f "index.js" ]; then
-        echo "🔍 Validating index.js"
-        node -c index.js || exit 1
-      elif [ -f "src/index.js" ]; then
-        echo "🔍 Validating src/index.js"
-        node -c src/index.js || exit 1
-      elif [ -f "server.js" ]; then
-        echo "🔍 Validating server.js"
-        node -c server.js || exit 1
-      else
-        # Valider n'importe quel fichier JavaScript
-        echo "🔍 Looking for any JavaScript file..."
-        JS_FILE=$(find . -name "*.js" -not -path "./node_modules/*" -not -path "./coverage/*" | head -1)
-        if [ -n "$JS_FILE" ]; then
-          echo "🔍 Validating $JS_FILE"
-          node -c "$JS_FILE" || exit 1
+      # Vérifier que tsconfig.json existe maintenant
+      if [ -f "tsconfig.json" ]; then
+        echo "✅ tsconfig.json found - TypeScript project"
+
+        # Validation TypeScript
+        echo "🔍 TypeScript compilation check..."
+        if [ -f "node_modules/.bin/tsc" ]; then
+          echo "🔍 Using local TypeScript compiler"
+          ./node_modules/.bin/tsc --noEmit --skipLibCheck
         else
-          echo "✅ No JavaScript files to validate - project structure appears valid"
+          echo "🔍 Using npx TypeScript"
+          npx tsc --noEmit --skipLibCheck
         fi
+        echo "✅ TypeScript validation passed"
+
+      else
+        echo "❌ tsconfig.json not found - this should not happen"
+        exit 1
+      fi
+
+      # Validation JavaScript de base
+      echo "🔍 JavaScript syntax validation..."
+      if [ -f "index.js" ]; then
+        node -c index.js && echo "✅ index.js syntax valid" || echo "❌ index.js syntax error"
       fi
 
       echo "✅ Backend validation completed successfully"
