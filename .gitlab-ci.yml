@@ -493,18 +493,10 @@ build_frontend_image:
     - quality_gate
   script:
     - |
-      echo "🧹 CLEANING DOCKER CACHE..."
-      docker system prune -a -f
+      echo "🧹 Cleaning Docker builder cache..."
+      docker builder prune -af
 
-      echo "🔍 Checking for .babelrc before build..."
-      if [ -f "client/.babelrc" ]; then
-        echo "❌ .babelrc found - DELETING IT"
-        rm -f client/.babelrc
-      else
-        echo "✅ No .babelrc found"
-      fi
-
-      echo "🏗️ Building Frontend image with FORCED SWC..."
+      echo "🏗️ Building Frontend image WITHOUT CACHE..."
       docker build --no-cache -t $FRONTEND_IMAGE:$COMMIT_TAG -t $FRONTEND_IMAGE:latest ./client
 
       echo "🔍 Built images:"

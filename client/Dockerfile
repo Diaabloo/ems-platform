@@ -6,12 +6,17 @@ WORKDIR /app
 COPY package*.json ./
 RUN npm ci
 
-# Copy source code
+# Copy source code and EXPLICITLY DELETE .babelrc
 COPY . .
 
-# DELETE .babelrc explicitly to force SWC
-RUN rm -f .babelrc && \
-    echo "✅ .babelrc removed - forcing SWC"
+# FORCE DELETE .babelrc and any babel configs
+RUN find . -name ".babelrc" -delete && \
+    find . -name "*.babel*" -delete && \
+    find . -name "babel.config.*" -delete && \
+    echo "✅ ALL BABEL CONFIGS DELETED"
+
+# Verify deletion
+RUN if [ -f ".babelrc" ]; then echo "❌ .babelrc STILL EXISTS" && exit 1; else echo "✅ .babelrc successfully deleted"; fi
 
 # Build with forced SWC
 ENV NEXT_DISABLE_BABEL=1

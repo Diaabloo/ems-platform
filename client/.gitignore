@@ -40,3 +40,5 @@ coverage/
 
 # Partage/Dossier inutile dans build Docker
 shared/
+
+.babelrc
