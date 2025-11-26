@@ -250,17 +250,27 @@ validate_prisma_schema:
     - |
       echo "🗄️ Prisma schema validation..."
       cd backend
-      echo "🔍 Using existing Prisma v6 from package.json..."
+      echo "🔍 Using direct Prisma binary path..."
+
+      # Utiliser le chemin direct vers le binaire Prisma
+      PRISMA_BIN="./node_modules/.bin/prisma"
+
       echo "📋 Prisma version:"
-      npx prisma --version
+      $PRISMA_BIN --version
+
       echo "📋 Prisma schema content (first 10 lines):"
       head -10 prisma/schema.prisma
+
       echo "🔍 Validating schema syntax..."
-      npx prisma validate
+      $PRISMA_BIN validate
+
       echo "🔍 Generating Prisma client..."
-      npx prisma generate
+      $PRISMA_BIN generate
+
       echo "🔍 Testing database connection..."
-      npx prisma db execute --stdin --url "$DATABASE_URL" <<< "SELECT version();" && echo "✅ Database connection successful"
+      $PRISMA_BIN db execute --stdin --url "$DATABASE_URL" <<< "SELECT version();"
+      echo "✅ Database connection successful"
+
       echo "✅ Prisma schema validated successfully"
   rules:
     - if: '$CI_COMMIT_REF_NAME == "dev" || $CI_COMMIT_REF_NAME == "main"'
