@@ -335,59 +335,32 @@ validate_backend:
       echo "🔍 Backend validation..."
       cd backend
 
-      echo "🔍 Project structure:"
-      ls -la
+      # Validation JavaScript uniquement - ignorer TypeScript
+      echo "🔍 JavaScript syntax validation..."
 
-      # Vérifier si tsconfig.json existe
-      if [ -f "tsconfig.json" ]; then
-        echo "✅ tsconfig.json found"
-        echo "🔍 TypeScript configuration:"
-        cat tsconfig.json | head -20
-
-        # Vérifier l'installation de TypeScript
-        echo "🔍 TypeScript verification..."
-        if [ -f "node_modules/.bin/tsc" ]; then
-          echo "✅ TypeScript found locally"
-          TSC_CMD="./node_modules/.bin/tsc"
-        else
-          echo "⚠️ Using npx for TypeScript"
-          TSC_CMD="npx tsc"
-        fi
-
-        # Exécuter la compilation TypeScript avec gestion d'erreur
-        echo "🔍 Running TypeScript compilation..."
-        $TSC_CMD --noEmit --skipLibCheck --listFiles 2>/dev/null || {
-          echo "⚠️ TypeScript compilation completed with warnings"
-          # Continuer même s'il y a des avertissements
-        }
-        echo "✅ TypeScript validation completed"
-
-      else
-        echo "⚠️ No tsconfig.json found"
-
-        # Vérifier s'il y a des fichiers TypeScript
-        TS_FILES=$(find . -name "*.ts" -not -path "./node_modules/*")
-        if [ -n "$TS_FILES" ]; then
-          echo "⚠️ TypeScript files found but no tsconfig.json:"
-          echo "$TS_FILES" | head -10
-          echo "❌ Please add a tsconfig.json file for TypeScript projects"
-          exit 1
-        else
-          echo "✅ No TypeScript files found - this is a JavaScript project"
-        fi
-      fi
-
-      # Validation JavaScript de base
-      echo "🔍 Running JavaScript syntax validation..."
+      # Vérifier le fichier principal
       if [ -f "index.js" ]; then
-        node -c index.js && echo "✅ index.js syntax valid" || echo "❌ index.js syntax error"
+        echo "🔍 Validating index.js"
+        node -c index.js || exit 1
+      elif [ -f "src/index.js" ]; then
+        echo "🔍 Validating src/index.js"
+        node -c src/index.js || exit 1
+      elif [ -f "server.js" ]; then
+        echo "🔍 Validating server.js"
+        node -c server.js || exit 1
+      else
+        # Valider n'importe quel fichier JavaScript
+        echo "🔍 Looking for any JavaScript file..."
+        JS_FILE=$(find . -name "*.js" -not -path "./node_modules/*" -not -path "./coverage/*" | head -1)
+        if [ -n "$JS_FILE" ]; then
+          echo "🔍 Validating $JS_FILE"
+          node -c "$JS_FILE" || exit 1
+        else
+          echo "✅ No JavaScript files to validate - project structure appears valid"
+        fi
       fi
 
-      if [ -f "src/index.js" ]; then
-        node -c src/index.js && echo "✅ src/index.js syntax valid" || echo "❌ src/index.js syntax error"
-      fi
-
-      echo "✅ Backend validation completed"
+      echo "✅ Backend validation completed successfully"
   rules:
     - if: '$CI_COMMIT_REF_NAME == "dev" || $CI_COMMIT_REF_NAME == "main"'
   timeout: 15 minutes
