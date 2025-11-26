@@ -334,53 +334,58 @@ validate_backend:
     - |
       echo "🔍 Backend validation..."
       cd backend
-      echo "🔍 Checking project structure..."
-      if [ -f "package.json" ]; then
-        echo "📦 Package.json found - checking scripts..."
 
-        # Vérifier que TypeScript est disponible
-        echo "🔍 Checking TypeScript installation..."
-        if [ -f "node_modules/.bin/tsc" ]; then
-          echo "✅ TypeScript compiler found locally"
-          TSC_CMD="./node_modules/.bin/tsc"
-        else
-          echo "⚠️ Local TypeScript not found, using npx"
-          TSC_CMD="npx tsc"
-        fi
-
-        if npm run | grep -q "type-check"; then
-          echo "✅ TypeScript project detected - running type check..."
-          $TSC_CMD --noEmit --skipLibCheck
-          echo "✅ TypeScript validation passed"
-        else
-          echo "🔍 No type-check script found, checking for TypeScript files..."
-          ts_files=$(find . -name "*.ts" -not -path "./node_modules/*" | wc -l)
-          if [ "$ts_files" -gt 0 ]; then
-            echo "✅ TypeScript files found - running basic type check..."
-            $TSC_CMD --noEmit --skipLibCheck 2>/dev/null || echo "⚠️ TypeScript check completed with warnings"
-          else
-            echo "✅ JavaScript project - no TypeScript files to check"
-            echo "🔍 Running basic JavaScript validation..."
-            if [ -f "index.js" ]; then
-              node -c index.js && echo "✅ index.js syntax is valid"
-            fi
-            if [ -f "src/index.js" ]; then
-              node -c src/index.js && echo "✅ src/index.js syntax is valid"
-            fi
-            if [ -f "server.js" ]; then
-              node -c server.js && echo "✅ server.js syntax is valid"
-            fi
-            echo "🎉 JavaScript project validation completed"
-          fi
-        fi
-      else
-        echo "❌ No package.json found in backend directory"
-        exit 1
+      # Assure que node_modules est présent
+      if [ ! -d "node_modules" ]; then
+        echo "⚠️ node_modules missing — reinstalling dependencies..."
+        npm install
       fi
+
+      echo "🔍 Checking project structure..."
+
+      # Vérifier l'installation de TypeScript
+      echo "🔍 TypeScript verification..."
+      if [ -f "node_modules/.bin/tsc" ]; then
+        echo "✅ TypeScript found locally"
+        TSC_CMD="./node_modules/.bin/tsc"
+      else
+        echo "⚠️ Using npx for TypeScript"
+        TSC_CMD="npx tsc"
+      fi
+
+      # Vérifier si tsconfig.json existe
+      if [ -f "tsconfig.json" ]; then
+        echo "✅ tsconfig.json found - running TypeScript check..."
+        $TSC_CMD --noEmit --skipLibCheck
+        echo "✅ TypeScript validation passed"
+      else
+        echo "⚠️ No tsconfig.json found, checking for TypeScript files..."
+        ts_files=$(find . -name "*.ts" -not -path "./node_modules/*" | wc -l)
+        if [ "$ts_files" -gt 0 ]; then
+          echo "✅ TypeScript files found - running basic type check..."
+          $TSC_CMD --noEmit --skipLibCheck 2>/dev/null || echo "⚠️ TypeScript check completed with warnings"
+        else
+          echo "✅ JavaScript project - no TypeScript files to check"
+          echo "🔍 Running basic JavaScript validation..."
+          if [ -f "index.js" ]; then
+            node -c index.js && echo "✅ index.js syntax is valid"
+          fi
+          if [ -f "src/index.js" ]; then
+            node -c src/index.js && echo "✅ src/index.js syntax is valid"
+          fi
+          if [ -f "server.js" ]; then
+            node -c server.js && echo "✅ server.js syntax is valid"
+          fi
+          echo "🎉 JavaScript project validation completed"
+        fi
+      fi
+
       echo "✅ Backend validation completed successfully"
   rules:
     - if: '$CI_COMMIT_REF_NAME == "dev" || $CI_COMMIT_REF_NAME == "main"'
   timeout: 15 minutes
+  allow_failure: false
+
 
 test_frontend:
   stage: validate_test
