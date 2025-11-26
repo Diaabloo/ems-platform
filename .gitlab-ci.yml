@@ -493,24 +493,35 @@ build_frontend_image:
     - quality_gate
   script:
     - |
-      echo "🏗️ Building Frontend image..."
-      echo "🔍 Build context:"
-      ls -la client/
-      docker build -t $FRONTEND_IMAGE:$COMMIT_TAG -t $FRONTEND_IMAGE:latest ./client
+      echo "🧹 CLEANING DOCKER CACHE..."
+      docker system prune -a -f
+
+      echo "🔍 Checking for .babelrc before build..."
+      if [ -f "client/.babelrc" ]; then
+        echo "❌ .babelrc found - DELETING IT"
+        rm -f client/.babelrc
+      else
+        echo "✅ No .babelrc found"
+      fi
+
+      echo "🏗️ Building Frontend image with FORCED SWC..."
+      docker build --no-cache -t $FRONTEND_IMAGE:$COMMIT_TAG -t $FRONTEND_IMAGE:latest ./client
+
       echo "🔍 Built images:"
       docker images | grep "$FRONTEND_IMAGE"
+
       if [ "$CI_COMMIT_REF_NAME" = "main" ]; then
-        echo "🚀 Pushing Frontend image to Docker Hub..."
+        echo "🚀 Pushing to Docker Hub..."
         docker push $FRONTEND_IMAGE:$COMMIT_TAG
         docker push $FRONTEND_IMAGE:latest
-        echo "✅ Frontend image pushed successfully"
       else
-        echo "⏭️ Push skipped (dev branch - pre-production)"
+        echo "⏭️ Push skipped (dev branch)"
       fi
-      echo "✅ Frontend image built"
+
+      echo "✅ FRONTEND BUILD SUCCESSFUL!"
   rules:
     - if: '$CI_COMMIT_REF_NAME == "dev" || $CI_COMMIT_REF_NAME == "main"'
-  timeout: 15 minutes
+  timeout: 20 minutes
 
 build_backend_image:
   stage: build

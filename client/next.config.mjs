@@ -1,17 +1,27 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   typescript: {
-    // ✅ Ignorer les erreurs TypeScript pendant le build
     ignoreBuildErrors: true,
   },
   eslint: {
-    // ✅ Ignorer les erreurs ESLint pendant le build
     ignoreDuringBuilds: true,
   },
-  // ✅ Activer SWC au lieu de Babel
   swcMinify: true,
-  // ✅ Désactiver la télémétrie
-  telemetry: false,
+  compiler: {
+    removeConsole: process.env.NODE_ENV === 'production',
+  },
+  // Désactiver complètement le cache Babel
+  experimental: {
+    forceSwcTransforms: true,
+  },
+  webpack: (config, { buildId, dev, isServer, defaultLoaders, webpack }) => {
+    // Forcer SWC et désactiver Babel
+    config.resolve.fallback = {
+      ...config.resolve.fallback,
+      babel: false,
+    };
+    return config;
+  },
 }
 
 export default nextConfig
