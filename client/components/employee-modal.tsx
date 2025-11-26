@@ -2,7 +2,9 @@
 
 import type React from "react"
 import { useState, useEffect } from "react"
-import { useStore, type Employee } from "@/lib/store"
+// import { useStore, type Employee } from "@/lib/store"
+import { useStore } from "@/lib/store"
+import type { Employee } from "@/lib/store"
 import { X } from "lucide-react"
 import { toast } from "sonner"
 

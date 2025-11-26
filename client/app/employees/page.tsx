@@ -6,7 +6,9 @@ import { useRouter } from "next/navigation"
 import Link from "next/link"
 import { Sidebar } from "@/components/sidebar"
 import { Navbar } from "@/components/navbar"
-import { useStore, type Employee } from "@/lib/store"
+// import { useStore, type Employee } from "@/lib/store"
+import { useStore } from "@/lib/store"
+import type { Employee } from "@/lib/store"
 import { Search, Plus, Edit, Trash2, Eye, ChevronLeft, ChevronRight } from "lucide-react"
 import { EmployeeModal } from "@/components/employee-modal"
 import { toast } from "sonner"
@@ -128,7 +130,7 @@ export default function EmployeesPage() {
           <div className="mb-6 flex items-center justify-between">
             <div>
               <h1 className="text-3xl font-bold text-foreground">Employees</h1>
-              <p className="mt-1 text-sm text-muted-foreground">Manage your organization's employees</p>
+              <p className="mt-1 text-sm text-muted-foreground">Manage your organizations employees</p>
             </div>
             <button
               onClick={handleAddNew}

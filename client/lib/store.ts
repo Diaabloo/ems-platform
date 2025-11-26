@@ -4,7 +4,7 @@ import { create } from "zustand"
 import { persist } from "zustand/middleware"
 
 // Types
-export interface Absence {
+export type Absence = {
   id: string
   employeeId: number
   date: string
