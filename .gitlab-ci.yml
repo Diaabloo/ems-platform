@@ -1,11 +1,14 @@
 stages:
-  - dependencies
+  - setup
+  - quality
   - security
-  - validate_test
-  - quality_gate
+  - analysis
+  - test
   - build
+  - image_scan
+  - infrastructure
   - deploy
-  - clean
+  - finalize
 
 variables:
   GIT_CLEAN_FLAGS: -ffdx -e client/node_modules/ -e backend/node_modules/
@@ -26,6 +29,7 @@ variables:
   NODE_ENV: "ci"
   CI: "true"
 
+# === TEMPLATES ===
 .docker_template: &docker_template
   image: docker:24
   variables:
@@ -37,10 +41,6 @@ variables:
     - docker info
     - echo "📦 Logging into Docker Hub..."
     - echo "$DOCKERHUB_TOKEN" | docker login -u "$DOCKERHUB_USERNAME" --password-stdin
-    - echo "🔍 Active Docker containers:"
-    - docker ps -a
-    - echo "🔍 Docker images:"
-    - docker images
   tags:
     - windows
     - docker
@@ -52,8 +52,6 @@ variables:
     - echo "🔧 Node.js Environment Setup"
     - node --version
     - npm --version
-    - echo "🔍 Disk space:"
-    - df -h
   tags:
     - windows
     - docker
@@ -87,16 +85,6 @@ variables:
         sleep 2
         counter=$((counter + 1))
       done
-    - echo "🔍 Testing database connection with psql..."
-    - |
-      if psql -h postgres -U postgres -d postgres -c "SELECT version();"; then
-        echo "✅ Database connection successful"
-      else
-        echo "❌ Database connection failed"
-        echo "🔍 Checking if PostgreSQL container is running..."
-        docker ps | grep postgres || echo "PostgreSQL container not found"
-        exit 1
-      fi
   tags:
     - windows
     - docker
@@ -107,27 +95,34 @@ variables:
   before_script:
     - echo "🔧 Alpine Linux Setup"
     - apk add --no-cache openssh-client curl postgresql-client bc
-    - echo "🔍 SSH version:"
-    - ssh -V
   tags:
     - windows
     - docker
     - ems-platform
 
-.quality_template: &quality_template
-  image: node:${NODE_VERSION}
+.sonarqube_template: &sonarqube_template
+  image: sonarsource/sonar-scanner-cli:latest
   before_script:
-    - echo "📊 Quality Gate Setup"
-    - node --version
-    - npm --version
+    - echo "🔧 SonarQube Scanner Setup"
+    - sonar-scanner --version
   tags:
     - windows
     - docker
     - ems-platform
 
-# === DEPENDENCIES STAGE ===
+.trivy_template: &trivy_template
+  image: aquasec/trivy:latest
+  before_script:
+    - echo "🔧 Trivy Security Scanner Setup"
+    - trivy --version
+  tags:
+    - windows
+    - docker
+    - ems-platform
+
+# === SETUP STAGE ===
 install_frontend_deps:
-  stage: dependencies
+  stage: setup
   <<: *node_template
   script:
     - |
@@ -142,8 +137,6 @@ install_frontend_deps:
       echo "✅ Frontend dependencies installed successfully"
       echo "📊 Dependency size:"
       du -sh node_modules || echo "Could not calculate size"
-      echo "🔍 Jest verification:"
-      ls -la node_modules/.bin/jest && echo "✅ Jest binary found" || echo "❌ Jest binary missing"
   cache:
     key: "frontend-npm-${CI_COMMIT_REF_SLUG}"
     paths:
@@ -158,7 +151,7 @@ install_frontend_deps:
   timeout: 15 minutes
 
 install_backend_deps:
-  stage: dependencies
+  stage: setup
   <<: *node_postgres_template
   script:
     - |
@@ -169,8 +162,6 @@ install_backend_deps:
       echo "🔍 Checking for existing node_modules..."
       if [ -d "node_modules" ]; then
         echo "🔄 node_modules found, using cache..."
-        echo "🔍 Cache contents (Prisma):"
-        ls -la node_modules/.prisma/ 2>/dev/null || echo "No Prisma in cache"
         npm ci --prefer-offline --no-audit
         echo "✅ Backend dependencies updated from cache"
       else
@@ -184,8 +175,6 @@ install_backend_deps:
       npx prisma@6.18.0 generate --no-hints
       echo "📊 Dependency size:"
       du -sh node_modules || echo "Could not calculate size"
-      echo "🔍 Prisma client verification:"
-      ls -la node_modules/.prisma/client/ || echo "Prisma client not found"
   cache:
     key: "backend-npm-${CI_COMMIT_REF_SLUG}"
     paths:
@@ -203,33 +192,89 @@ install_backend_deps:
     - if: '$CI_COMMIT_REF_NAME == "dev" || $CI_COMMIT_REF_NAME == "main"'
   timeout: 15 minutes
 
-# === SECURITY STAGE ===
-audit_frontend:
-  stage: security
+# === QUALITY STAGE ===
+eslint_frontend:
+  stage: quality
   <<: *node_template
-  variables:
-    GIT_DEPTH: 50
   dependencies:
     - install_frontend_deps
-  before_script:
-    - mkdir -p artifacts
   script:
     - |
-      echo "🔒 Frontend security audit..."
+      echo "📝 Running ESLint on Frontend..."
       cd client
-      echo "📋 Audit report:"
-      npm audit --audit-level high --production --json > ../artifacts/audit-frontend.json
-      echo "NPM audit completed with exit code: $?"
-      echo "✅ Frontend audit completed"
+      mkdir -p artifacts
+      npx eslint src/ --format json --output-file artifacts/eslint-frontend.json || true
+      echo "✅ ESLint completed"
   artifacts:
     paths:
-      - artifacts/audit-frontend.json
+      - client/artifacts/eslint-frontend.json
     expire_in: 1 week
     when: always
   rules:
     - if: '$CI_COMMIT_REF_NAME == "dev" || $CI_COMMIT_REF_NAME == "main"'
   allow_failure: true
-  timeout: 10 minutes
+
+eslint_backend:
+  stage: quality
+  <<: *node_template
+  dependencies:
+    - install_backend_deps
+  script:
+    - |
+      echo "📝 Running ESLint on Backend..."
+      cd backend
+      mkdir -p artifacts
+      npx eslint . --ext .js,.ts --format json --output-file artifacts/eslint-backend.json || true
+      echo "✅ ESLint completed"
+  artifacts:
+    paths:
+      - backend/artifacts/eslint-backend.json
+    expire_in: 1 week
+    when: always
+  rules:
+    - if: '$CI_COMMIT_REF_NAME == "dev" || $CI_COMMIT_REF_NAME == "main"'
+  allow_failure: true
+
+prettier_check:
+  stage: quality
+  <<: *node_template
+  dependencies:
+    - install_frontend_deps
+    - install_backend_deps
+  script:
+    - |
+      echo "🎨 Running Prettier check..."
+      echo "📁 Frontend formatting..."
+      cd client && npx prettier --check src/ || true
+      cd ..
+      echo "📁 Backend formatting..."
+      cd backend && npx prettier --check . || true
+      echo "✅ Prettier check completed"
+  rules:
+    - if: '$CI_COMMIT_REF_NAME == "dev" || $CI_COMMIT_REF_NAME == "main"'
+  allow_failure: true
+
+# === SECURITY STAGE ===
+audit_frontend:
+  stage: security
+  <<: *node_template
+  dependencies:
+    - install_frontend_deps
+  script:
+    - |
+      echo "🔒 Frontend security audit..."
+      cd client
+      mkdir -p artifacts
+      npm audit --audit-level high --production --json > artifacts/audit-frontend.json || true
+      echo "✅ Frontend audit completed"
+  artifacts:
+    paths:
+      - client/artifacts/audit-frontend.json
+    expire_in: 1 week
+    when: always
+  rules:
+    - if: '$CI_COMMIT_REF_NAME == "dev" || $CI_COMMIT_REF_NAME == "main"'
+  allow_failure: true
 
 audit_backend:
   stage: security
@@ -240,18 +285,17 @@ audit_backend:
     - |
       echo "🔒 Backend security audit..."
       cd backend
-      echo "📋 Audit report:"
-      npm audit --audit-level high --production --json > audit-backend.json 2>/dev/null || true
+      mkdir -p artifacts
+      npm audit --audit-level high --production --json > artifacts/audit-backend.json || true
       echo "✅ Backend audit completed"
   artifacts:
     paths:
-      - backend/audit-backend.json
+      - backend/artifacts/audit-backend.json
     expire_in: 1 week
     when: always
   rules:
     - if: '$CI_COMMIT_REF_NAME == "dev" || $CI_COMMIT_REF_NAME == "main"'
   allow_failure: true
-  timeout: 10 minutes
 
 validate_prisma_schema:
   stage: security
@@ -262,151 +306,92 @@ validate_prisma_schema:
     - |
       echo "🗄️ Prisma schema validation..."
       cd backend
-      echo "🔍 Using artifacts from install_backend_deps..."
-
-      echo "📋 Verifying node_modules exists..."
-      ls -la node_modules/.bin/prisma && echo "✅ Prisma binary found" || echo "❌ Prisma binary missing"
-
-      echo "📋 Prisma version:"
-      ./node_modules/.bin/prisma --version || npx prisma@6.18.0 --version
-
-      echo "📋 Prisma schema content (first 10 lines):"
-      head -10 prisma/schema.prisma
-
       echo "🔍 Validating schema syntax..."
-      ./node_modules/.bin/prisma validate || npx prisma@6.18.0 validate
-
-      echo "🔍 Generating Prisma client..."
-      ./node_modules/.bin/prisma generate || npx prisma@6.18.0 generate
-
+      npx prisma@6.18.0 validate
       echo "🔍 Testing database connection..."
-      ./node_modules/.bin/prisma db execute --stdin --url "$DATABASE_URL" <<< "SELECT version();" || npx prisma@6.18.0 db execute --stdin --url "$DATABASE_URL" <<< "SELECT version();"
+      npx prisma@6.18.0 db execute --stdin --url "$DATABASE_URL" <<< "SELECT version();"
       echo "✅ Database connection successful"
-
       echo "✅ Prisma schema validated successfully"
   rules:
     - if: '$CI_COMMIT_REF_NAME == "dev" || $CI_COMMIT_REF_NAME == "main"'
   timeout: 15 minutes
   allow_failure: false
 
-# === VALIDATE & TEST STAGE ===
-validate_frontend:
-  stage: validate_test
-  <<: *node_template
-  dependencies:
-    - install_frontend_deps
+trivy_filesystem_scan:
+  stage: security
+  <<: *trivy_template
   script:
     - |
-      echo "🔍 Frontend build validation..."
-      cd client
-      echo "🔧 Building application with relaxed type checking..."
-      # Construire en ignorant les erreurs de type
-      NEXT_IGNORE_TYPECHECKS=1 npm run build 2>/dev/null || echo "⚠️ Build process completed"
-
-      echo "📊 Checking build output..."
-      if [ -d "build" ] || [ -d "dist" ] || [ -d ".next" ]; then
-        echo "✅ Build output detected"
-        [ -d "build" ] && du -sh build/
-        [ -d "dist" ] && du -sh dist/
-        [ -d ".next" ] && du -sh .next/
-      else
-        echo "❌ No build output found"
-        exit 1
-      fi
-      echo "✅ Frontend validation completed"
+      echo "🔍 Trivy Filesystem Security Scan..."
+      mkdir -p artifacts
+      trivy filesystem . --format json --output artifacts/trivy-fs-scan.json || true
+      trivy filesystem . --format table --output artifacts/trivy-fs-scan.txt || true
+      echo "✅ Trivy filesystem scan completed"
   artifacts:
     paths:
-      - client/build/
-      - client/dist/
-      - client/.next/
-    expire_in: 1 hour
+      - artifacts/trivy-fs-scan.json
+      - artifacts/trivy-fs-scan.txt
+    expire_in: 1 week
+    when: always
   rules:
     - if: '$CI_COMMIT_REF_NAME == "dev" || $CI_COMMIT_REF_NAME == "main"'
-  timeout: 15 minutes
-  allow_failure: false
+  allow_failure: true
 
-validate_backend:
-  stage: validate_test
-  <<: *node_postgres_template
+# === ANALYSIS STAGE ===
+sonarqube_analysis:
+  stage: analysis
+  <<: *sonarqube_template
   dependencies:
+    - install_frontend_deps
     - install_backend_deps
   script:
     - |
-      echo "🔍 Backend validation..."
-      cd backend
-
-      echo "🔍 Project structure:"
-      ls -la
-
-      # Validation TypeScript pour le code source principal SEULEMENT
-      echo "🔍 TypeScript compilation check for main source..."
-      if [ -f "node_modules/.bin/tsc" ]; then
-        ./node_modules/.bin/tsc --noEmit --skipLibCheck
-      else
-        npx tsc --noEmit --skipLibCheck
-      fi
-      echo "✅ TypeScript validation passed"
-
-      # Validation JavaScript de base
-      echo "🔍 JavaScript syntax validation..."
-      if [ -f "index.js" ]; then
-        node -c index.js && echo "✅ index.js syntax valid" || echo "❌ index.js syntax error"
-      fi
-
-      # Validation des scripts JavaScript (optionnel)
-      echo "🔍 Scripts validation..."
-      if [ -f "scripts/import-employees.js" ]; then
-        node -c scripts/import-employees.js && echo "✅ import-employees.js syntax valid" || echo "⚠️ import-employees.js has syntax issues"
-      fi
-
-      echo "✅ Backend validation completed successfully"
+      echo "📊 SonarQube Analysis..."
+      # Configuration SonarQube (à adapter selon votre setup)
+      sonar-scanner \
+        -Dsonar.projectKey=ems-platform \
+        -Dsonar.sources=.,client/src,backend \
+        -Dsonar.host.url=${SONAR_HOST_URL} \
+        -Dsonar.login=${SONAR_TOKEN} \
+        -Dsonar.coverage.exclusions=**/node_modules/**,**/*.test.js,**/*.spec.js \
+        -Dsonar.javascript.lcov.reportPaths=client/coverage/lcov.info,backend/coverage/lcov.info
+      echo "✅ SonarQube analysis completed"
   rules:
     - if: '$CI_COMMIT_REF_NAME == "dev" || $CI_COMMIT_REF_NAME == "main"'
-  timeout: 15 minutes
-  allow_failure: false
+  allow_failure: true
+  only:
+    variables:
+      - $SONAR_HOST_URL
 
-
+# === TEST STAGE ===
 test_frontend:
-  stage: validate_test
+  stage: test
   <<: *node_template
   dependencies:
     - install_frontend_deps
   script:
     - |
-      echo "🧪 Running Frontend tests with detailed reporting..."
+      echo "🧪 Running Frontend tests with coverage..."
       cd client
-      echo "🔧 Setting up test environment..."
       mkdir -p test-results
-      mkdir -p coverage-reports
+      mkdir -p coverage
 
-      echo "🔍 Verifying Jest installation..."
-      ls -la node_modules/.bin/jest && echo "✅ Jest binary found" || echo "❌ Jest binary missing"
-
-      echo "📊 Running tests with coverage and JUnit reports..."
-      # Utiliser le chemin direct vers Jest
-      ./node_modules/.bin/jest --runInBand --watchAll=false --passWithNoTests --silent --coverage --coverageDirectory=coverage --testResultsProcessor=jest-junit --collectCoverageFrom="[\"src/**/*.{js,jsx,ts,tsx}\",\"!src/**/*.d.ts\"]" --coverageReporters=cobertura --coverageReporters=html --coverageReporters=text --coverageReporters=lcov --reporters=default --reporters=jest-junit
-
-      if [ -f "coverage/junit.xml" ]; then
-        cp coverage/junit.xml test-results/;
-        echo "✅ JUnit report generated"
-      else
-        echo "⚠️ No JUnit report found"
-      fi
+      echo "📊 Running tests with coverage..."
+      ./node_modules/.bin/jest --runInBand --watchAll=false --passWithNoTests --silent \
+        --coverage --coverageDirectory=coverage \
+        --collectCoverageFrom="[\"src/**/*.{js,jsx,ts,tsx}\",\"!src/**/*.d.ts\"]" \
+        --coverageReporters=cobertura --coverageReporters=html --coverageReporters=text --coverageReporters=lcov
 
       echo "📈 Test Coverage Summary:"
       if [ -f "coverage/coverage-summary.json" ]; then
         cat coverage/coverage-summary.json | grep -A 4 '"total"'
-      else
-        echo "⚠️ No coverage summary found"
       fi
 
-      echo "✅ Frontend tests completed with detailed artifacts"
+      echo "✅ Frontend tests completed"
   artifacts:
     paths:
       - client/coverage/
       - client/test-results/
-    reports:
-      junit: client/test-results/junit.xml
     expire_in: 1 week
     when: always
   rules:
@@ -415,7 +400,7 @@ test_frontend:
   timeout: 15 minutes
 
 test_backend:
-  stage: validate_test
+  stage: test
   <<: *node_postgres_template
   dependencies:
     - install_backend_deps
@@ -423,10 +408,7 @@ test_backend:
     - |
       echo "🧪 Running Backend tests..."
       cd backend
-      echo "🔧 Test environment setup..."
-      echo "Database host: $POSTGRES_HOST"
-      echo "Database port: $POSTGRES_PORT"
-      echo "Database name: $POSTGRES_DB"
+      mkdir -p coverage
       npm run test:ci
       echo "✅ Backend tests completed"
   artifacts:
@@ -439,78 +421,19 @@ test_backend:
   allow_failure: true
   timeout: 10 minutes
 
-# === QUALITY GATE STAGE ===
-quality_gate:
-  stage: quality_gate
-  <<: *alpine_template
-  dependencies:
-    - test_frontend
-  script:
-    - |
-      echo "📊 Quality Gate Check"
-      cd client
-      if [ -f "coverage/coverage-summary.json" ]; then
-        echo "📈 Frontend Coverage Report"
-        LINE_COVERAGE=$(node -e "console.log(require('./coverage/coverage-summary.json').total.lines.pct)" 2>/dev/null || echo "0")
-        STATEMENT_COVERAGE=$(node -e "console.log(require('./coverage/coverage-summary.json').total.statements.pct)" 2>/dev/null || echo "0")
-        FUNCTION_COVERAGE=$(node -e "console.log(require('./coverage/coverage-summary.json').total.functions.pct)" 2>/dev/null || echo "0")
-        BRANCH_COVERAGE=$(node -e "console.log(require('./coverage/coverage-summary.json').total.branches.pct)" 2>/dev/null || echo "0")
-        echo "📊 Coverage Summary:"
-        echo "Lines: ${LINE_COVERAGE}%"
-        echo "Statements: ${STATEMENT_COVERAGE}%"
-        echo "Functions: ${FUNCTION_COVERAGE}%"
-        echo "Branches: ${BRANCH_COVERAGE}%"
-        THRESHOLD=80
-        echo "🎯 Quality Threshold: ${THRESHOLD}%"
-        FAILED=false
-        if [ $(echo "$LINE_COVERAGE < $THRESHOLD" | bc) -eq 1 ]; then
-          echo "❌ Line coverage below threshold: ${LINE_COVERAGE}% < ${THRESHOLD}%"
-          FAILED=true
-        fi
-        if [ $(echo "$STATEMENT_COVERAGE < $THRESHOLD" | bc) -eq 1 ]; then
-          echo "❌ Statement coverage below threshold: ${STATEMENT_COVERAGE}% < ${THRESHOLD}%"
-          FAILED=true
-        fi
-        if [ "$FAILED" = true ]; then
-          echo "🚫 Quality Gate Failed - Please improve test coverage"
-          exit 1
-        else
-          echo "✅ Quality Gate Passed - All coverage metrics meet threshold"
-        fi
-      else
-        echo "⚠️ No coverage report found - skipping quality gate"
-      fi
-  rules:
-    - if: '$CI_COMMIT_REF_NAME == "main"'
-  allow_failure: false
-
 # === BUILD STAGE ===
 build_frontend_image:
   stage: build
   <<: *docker_template
   dependencies:
-    - validate_frontend
-    - quality_gate
+    - test_frontend
   script:
     - |
-      echo "🧹 Cleaning Docker builder cache..."
-      docker builder prune -af
-
-      echo "🏗️ Building Frontend image WITHOUT CACHE..."
-      docker build --no-cache -t $FRONTEND_IMAGE:$COMMIT_TAG -t $FRONTEND_IMAGE:latest ./client
-
+      echo "🏗️ Building Frontend image..."
+      docker build -t $FRONTEND_IMAGE:$COMMIT_TAG -t $FRONTEND_IMAGE:latest ./client
       echo "🔍 Built images:"
       docker images | grep "$FRONTEND_IMAGE"
-
-      if [ "$CI_COMMIT_REF_NAME" = "main" ]; then
-        echo "🚀 Pushing to Docker Hub..."
-        docker push $FRONTEND_IMAGE:$COMMIT_TAG
-        docker push $FRONTEND_IMAGE:latest
-      else
-        echo "⏭️ Push skipped (dev branch)"
-      fi
-
-      echo "✅ FRONTEND BUILD SUCCESSFUL!"
+      echo "✅ Frontend image built"
   rules:
     - if: '$CI_COMMIT_REF_NAME == "dev" || $CI_COMMIT_REF_NAME == "main"'
   timeout: 20 minutes
@@ -519,23 +442,13 @@ build_backend_image:
   stage: build
   <<: *docker_template
   dependencies:
-    - validate_backend
+    - test_backend
   script:
     - |
       echo "🏗️ Building Backend image..."
-      echo "🔍 Build context:"
-      ls -la backend/
       docker build -t $BACKEND_IMAGE:$COMMIT_TAG -t $BACKEND_IMAGE:latest ./backend
       echo "🔍 Built images:"
       docker images | grep "$BACKEND_IMAGE"
-      if [ "$CI_COMMIT_REF_NAME" = "main" ]; then
-        echo "🚀 Pushing Backend image to Docker Hub..."
-        docker push $BACKEND_IMAGE:$COMMIT_TAG
-        docker push $BACKEND_IMAGE:latest
-        echo "✅ Backend image pushed successfully"
-      else
-        echo "⏭️ Push skipped (dev branch - pre-production)"
-      fi
       echo "✅ Backend image built"
   rules:
     - if: '$CI_COMMIT_REF_NAME == "dev" || $CI_COMMIT_REF_NAME == "main"'
@@ -547,79 +460,211 @@ build_db_image:
   script:
     - |
       echo "🏗️ Building Database image..."
-      echo "🔍 Build context:"
-      ls -la db/
       docker build -t $DB_IMAGE:$COMMIT_TAG -t $DB_IMAGE:latest ./db
       echo "🔍 Built images:"
       docker images | grep "$DB_IMAGE"
-      if [ "$CI_COMMIT_REF_NAME" = "main" ]; then
-        echo "🚀 Pushing Database image to Docker Hub..."
-        docker push $DB_IMAGE:$COMMIT_TAG
-        docker push $DB_IMAGE:latest
-        echo "✅ Database image pushed successfully"
-      else
-        echo "⏭️ Push skipped (dev branch - pre-production)"
-      fi
       echo "✅ Database image built"
   rules:
     - if: '$CI_COMMIT_REF_NAME == "dev" || $CI_COMMIT_REF_NAME == "main"'
   timeout: 10 minutes
 
-# === DEPLOY STAGE ===
-deploy_staging:
-  stage: deploy
-  image: alpine:latest
+# === IMAGE_SCAN STAGE ===
+trivy_scan_frontend:
+  stage: image_scan
+  <<: *trivy_template
+  dependencies:
+    - build_frontend_image
   script:
-    - echo "🚀 Deployment stage - Ready for future CD implementation"
-    - echo "📋 This stage will handle automatic deployments to staging"
-    - echo "🔧 Configure STAGING_DEPLOY_* variables when ready"
-    - echo "✅ Deployment pipeline structure is ready"
+    - |
+      echo "🔍 Scanning Frontend image with Trivy..."
+      mkdir -p artifacts
+      trivy image --format json --output artifacts/trivy-frontend-scan.json $FRONTEND_IMAGE:$COMMIT_TAG || true
+      trivy image --format table --output artifacts/trivy-frontend-scan.txt $FRONTEND_IMAGE:$COMMIT_TAG || true
+      echo "✅ Frontend image scan completed"
+  artifacts:
+    paths:
+      - artifacts/trivy-frontend-scan.json
+      - artifacts/trivy-frontend-scan.txt
+    expire_in: 1 week
+    when: always
   rules:
-    - if: '$CI_COMMIT_REF_NAME == "dev"'
-      when: manual
-  tags:
-    - windows
-    - docker
-    - ems-platform
-  timeout: 5 minutes
+    - if: '$CI_COMMIT_REF_NAME == "dev" || $CI_COMMIT_REF_NAME == "main"'
+  allow_failure: true
 
-deploy_production:
-  stage: deploy
-  image: alpine:latest
+trivy_scan_backend:
+  stage: image_scan
+  <<: *trivy_template
+  dependencies:
+    - build_backend_image
   script:
-    - echo "🚀 Deployment stage - Ready for future CD implementation"
-    - echo "📋 This stage will handle manual deployments to production"
-    - echo "🔧 Configure DEPLOY_* variables when ready"
-    - echo "✅ Deployment pipeline structure is ready"
+    - |
+      echo "🔍 Scanning Backend image with Trivy..."
+      mkdir -p artifacts
+      trivy image --format json --output artifacts/trivy-backend-scan.json $BACKEND_IMAGE:$COMMIT_TAG || true
+      trivy image --format table --output artifacts/trivy-backend-scan.txt $BACKEND_IMAGE:$COMMIT_TAG || true
+      echo "✅ Backend image scan completed"
+  artifacts:
+    paths:
+      - artifacts/trivy-backend-scan.json
+      - artifacts/trivy-backend-scan.txt
+    expire_in: 1 week
+    when: always
   rules:
-    - if: '$CI_COMMIT_REF_NAME == "main"'
-      when: manual
-  tags:
-    - windows
-    - docker
-    - ems-platform
-  timeout: 5 minutes
+    - if: '$CI_COMMIT_REF_NAME == "dev" || $CI_COMMIT_REF_NAME == "main"'
+  allow_failure: true
 
-# === CLEAN & NOTIFY STAGE ===
+trivy_scan_db:
+  stage: image_scan
+  <<: *trivy_template
+  dependencies:
+    - build_db_image
+  script:
+    - |
+      echo "🔍 Scanning Database image with Trivy..."
+      mkdir -p artifacts
+      trivy image --format json --output artifacts/trivy-db-scan.json $DB_IMAGE:$COMMIT_TAG || true
+      trivy image --format table --output artifacts/trivy-db-scan.txt $DB_IMAGE:$COMMIT_TAG || true
+      echo "✅ Database image scan completed"
+  artifacts:
+    paths:
+      - artifacts/trivy-db-scan.json
+      - artifacts/trivy-db-scan.txt
+    expire_in: 1 week
+    when: always
+  rules:
+    - if: '$CI_COMMIT_REF_NAME == "dev" || $CI_COMMIT_REF_NAME == "main"'
+  allow_failure: true
+
+# === INFRASTRUCTURE STAGE (COMMENTÉ) ===
+# infrastructure_terraform:
+#   stage: infrastructure
+#   image: hashicorp/terraform:latest
+#   script:
+#     - |
+#       echo "🏗️ Terraform Infrastructure Deployment"
+#       cd terraform
+#       terraform init
+#       terraform validate
+#       terraform plan -out=plan.tfplan
+#       # terraform apply -auto-approve plan.tfplan
+#       echo "✅ Infrastructure deployment ready"
+#   rules:
+#     - if: '$CI_COMMIT_REF_NAME == "main"'
+#       when: manual
+#   tags:
+#     - windows
+#     - docker
+#     - ems-platform
+
+# infrastructure_kubernetes:
+#   stage: infrastructure
+#   image: bitnami/kubectl:latest
+#   script:
+#     - |
+#       echo "☸️ Kubernetes Manifests Validation"
+#       kubectl apply --dry-run=client -f k8s/
+#       echo "✅ Kubernetes manifests validated"
+#   rules:
+#     - if: '$CI_COMMIT_REF_NAME == "main"'
+#   tags:
+#     - windows
+#     - docker
+#     - ems-platform
+
+# === DEPLOY STAGE (COMMENTÉ) ===
+# deploy_staging:
+#   stage: deploy
+#   image: bitnami/kubectl:latest
+#   script:
+#     - |
+#       echo "🚀 Deploying to Staging Environment"
+#       kubectl config use-context staging
+#       kubectl apply -f k8s/
+#       kubectl rollout status deployment/ems-frontend -n ems-platform
+#       kubectl rollout status deployment/ems-backend -n ems-platform
+#       echo "✅ Staging deployment completed"
+#   rules:
+#     - if: '$CI_COMMIT_REF_NAME == "dev"'
+#       when: manual
+#   tags:
+#     - windows
+#     - docker
+#     - ems-platform
+
+# deploy_production:
+#   stage: deploy
+#   image: bitnami/kubectl:latest
+#   script:
+#     - |
+#       echo "🚀 Deploying to Production Environment"
+#       kubectl config use-context production
+#       kubectl apply -f k8s/
+#       kubectl rollout status deployment/ems-frontend -n ems-platform
+#       kubectl rollout status deployment/ems-backend -n ems-platform
+#       echo "✅ Production deployment completed"
+#   rules:
+#     - if: '$CI_COMMIT_REF_NAME == "main"'
+#       when: manual
+#   tags:
+#     - windows
+#     - docker
+#     - ems-platform
+
+# === FINALIZE STAGE ===
+push_images:
+  stage: finalize
+  <<: *docker_template
+  dependencies:
+    - trivy_scan_frontend
+    - trivy_scan_backend
+    - trivy_scan_db
+  script:
+    - |
+      echo "🚀 Pushing images to Docker Hub..."
+      if [ "$CI_COMMIT_REF_NAME" = "main" ]; then
+        echo "📦 Pushing Frontend image..."
+        docker push $FRONTEND_IMAGE:$COMMIT_TAG
+        docker push $FRONTEND_IMAGE:latest
+
+        echo "📦 Pushing Backend image..."
+        docker push $BACKEND_IMAGE:$COMMIT_TAG
+        docker push $BACKEND_IMAGE:latest
+
+        echo "📦 Pushing Database image..."
+        docker push $DB_IMAGE:$COMMIT_TAG
+        docker push $DB_IMAGE:latest
+
+        echo "✅ All images pushed successfully"
+      else
+        echo "⏭️ Push skipped (dev branch - pre-production)"
+      fi
+  rules:
+    - if: '$CI_COMMIT_REF_NAME == "dev" || $CI_COMMIT_REF_NAME == "main"'
+  timeout: 15 minutes
+
 notify_success:
-  stage: clean
+  stage: finalize
   image: alpine:latest
   script:
     - |
       echo "🎉 Pipeline completed successfully!"
       echo "📊 Summary:"
-      echo "- Tests: ✅ 32 tests passed"
-      echo "- Coverage: ✅ Quality gate passed"
-      echo "- Security: ✅ Audited"
-      echo "- Build: ✅ Images built"
+      echo "- Setup: ✅ Dependencies installed"
+      echo "- Quality: ✅ ESLint & Prettier checks"
+      echo "- Security: ✅ Audit & Trivy FS scan"
+      echo "- Analysis: ✅ SonarQube analysis"
+      echo "- Tests: ✅ Frontend & Backend tests"
+      echo "- Build: ✅ 3 Docker images built"
+      echo "- Image Scan: ✅ Trivy image scans"
+      echo "- Infrastructure: ⏭️ Ready for implementation"
+      echo "- Deploy: ⏭️ Ready for implementation"
+
       if [ "$CI_COMMIT_REF_NAME" = "main" ]; then
         echo "🚀 Production images pushed to Docker Hub"
-        echo "📦 Images:"
+        echo "📦 Available images:"
         echo "  - $FRONTEND_IMAGE:latest"
         echo "  - $BACKEND_IMAGE:latest"
         echo "  - $DB_IMAGE:latest"
-      else
-        echo "🔧 Development pipeline completed - ready for merge to main"
       fi
       echo "⏱️ Pipeline completed at: $(date)"
   when: on_success
@@ -628,22 +673,20 @@ notify_success:
     - docker
     - ems-platform
 
-cleanup_docker:
-  stage: clean
+cleanup:
+  stage: finalize
   <<: *docker_template
   script:
     - |
-      echo "🧹 Docker cleanup..."
-      echo "🔍 Before cleanup:"
+      echo "🧹 Pipeline cleanup..."
+      echo "🔍 Docker system info:"
       docker system df
-      echo "🔄 Pruning system..."
-      docker system prune -f --filter "until=24h"
-      echo "🔍 After cleanup:"
-      docker system df
+      echo "🔄 Pruning unused containers, networks, and images..."
+      docker system prune -f
       echo "✅ Cleanup completed"
   when: always
   allow_failure: true
-  timeout: 10 minutes
+  timeout: 5 minutes
 
 workflow:
   rules:

@@ -1,5 +1,5 @@
-import prisma from '../config/db.js';
-import bcrypt from 'bcrypt';
+import prisma from "../config/db.js";
+import bcrypt from "bcrypt";
 
 // GET User by email
 export async function findUserByEmail(email) {
@@ -12,7 +12,7 @@ export async function verifyPassword(user, password) {
 }
 
 // Create User (admin)
-export async function createUser(email, password, role = 'admin') {
+export async function createUser(email, password, role = "admin") {
   const hashed = await bcrypt.hash(password, 10);
   return prisma.user.create({
     data: { email, password: hashed, role },
@@ -21,7 +21,7 @@ export async function createUser(email, password, role = 'admin') {
 
 // Find all users
 export async function findAdmins() {
-  return prisma.user.findMany({ where: { role: 'admin' } });
+  return prisma.user.findMany({ where: { role: "admin" } });
 }
 
 // Update User

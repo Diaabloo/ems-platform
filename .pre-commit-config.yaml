@@ -1,0 +1,58 @@
+repos:
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v6.0.0
+    hooks:
+      - id: check-yaml
+      - id: end-of-file-fixer
+        exclude: 'node_modules/|\.cache/|\.next/'
+      - id: trailing-whitespace
+      - id: check-json
+      - id: check-added-large-files
+        args: ['--maxkb=500']
+      - id: no-commit-to-branch
+        args: ['--branch', 'main']
+
+  - repo: https://github.com/pre-commit/mirrors-prettier
+    rev: v4.0.0-alpha.8
+    hooks:
+      - id: prettier
+        files: \.(js|jsx|ts|tsx|css|scss|json|md)$
+        exclude: '^(client/node_modules/|backend/node_modules/|dist/|build/|\.next/|\.cache/)'
+
+  - repo: local
+    hooks:
+      # Frontend lint
+      - id: frontend-lint
+        name: Frontend ESLint
+        entry: npm
+        args: ['--prefix', 'client', 'run', 'lint']
+        language: system
+        pass_filenames: false
+        stages: [pre-commit]
+
+      # Frontend TypeScript check
+      - id: frontend-typecheck
+        name: Frontend TypeScript Check
+        entry: npm
+        args: ['--prefix', 'client', 'run', 'type-check']
+        language: system
+        pass_filenames: false
+        stages: [pre-commit]
+
+      # Backend lint
+      - id: backend-lint
+        name: Backend ESLint
+        entry: npm
+        args: ['--prefix', 'backend', 'run', 'lint']
+        language: system
+        pass_filenames: false
+        stages: [pre-commit]
+
+      # Backend TypeScript check
+      - id: backend-typecheck
+        name: Backend TypeScript Check
+        entry: npm
+        args: ['--prefix', 'backend', 'run', 'type-check']
+        language: system
+        pass_filenames: false
+        stages: [pre-commit]

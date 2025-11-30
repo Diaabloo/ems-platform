@@ -52,15 +52,18 @@ Le frontend sera disponible sur `http://localhost:3000`
 ## 🔧 Nouveaux fichiers créés
 
 ### Backend
+
 - `backend/src/models/employeeModel.js` - Modèle pour les opérations sur les employés
 - `backend/src/controllers/employeeController.js` - Contrôleur avec logique métier
 - `backend/src/routes/employeeRoutes.js` - Routes API pour les employés
 - `backend/scripts/generateEmployees.js` - Script de génération de données
 
 ### Frontend
+
 - `client/lib/api.ts` - Service API pour communiquer avec le backend
 
 ### Modifications
+
 - `backend/index.js` - Ajout des routes employés
 - `client/lib/store.ts` - Intégration avec l'API
 - `client/app/employees/page.tsx` - Utilisation des données API
@@ -69,33 +72,41 @@ Le frontend sera disponible sur `http://localhost:3000`
 ## 📡 Endpoints API
 
 ### GET /api/employees
+
 Récupère les employés avec pagination et recherche
 
 **Paramètres :**
+
 - `page` (optionnel) : Numéro de page (défaut: 1)
 - `limit` (optionnel) : Nombre d'éléments par page (défaut: 10)
 - `search` (optionnel) : Terme de recherche
 
 **Exemple :**
+
 ```
 GET /api/employees?page=1&limit=10&search=john
 ```
 
 ### GET /api/employees/:id
+
 Récupère un employé par son ID
 
 ### POST /api/employees
+
 Crée un nouvel employé
 
 ### PUT /api/employees/:id
+
 Met à jour un employé
 
 ### DELETE /api/employees/:id
+
 Supprime un employé
 
 ## 🔍 Fonctionnalités de recherche
 
 La recherche fonctionne sur les champs suivants :
+
 - `first_name` (prénom)
 - `last_name` (nom)
 - `email`
@@ -114,11 +125,13 @@ La recherche est **insensible à la casse** et utilise une correspondance partie
 ## 🎨 Interface utilisateur
 
 ### États de chargement
+
 - **Loading** : Spinner pendant le chargement des données
 - **Erreur** : Message d'erreur en cas de problème
 - **Vide** : Message informatif quand aucun employé n'est trouvé
 
 ### Recherche
+
 - **Debounced** : Recherche avec délai de 300ms pour éviter trop de requêtes
 - **Temps réel** : Mise à jour automatique des résultats
 - **Reset pagination** : Retour à la page 1 lors d'une nouvelle recherche
@@ -142,18 +155,22 @@ Tous les endpoints employés nécessitent une authentification via JWT token. Le
 ## 🐛 Dépannage
 
 ### Problème de connexion à la base de données
+
 - Vérifiez que PostgreSQL est démarré
 - Vérifiez la variable `DATABASE_URL` dans `.env`
 
 ### Erreur CORS
+
 - Vérifiez que le frontend est sur `http://localhost:3000`
 - Vérifiez la configuration CORS dans `backend/index.js`
 
 ### Erreur d'authentification
+
 - Vérifiez que le token JWT est présent dans localStorage
 - Vérifiez que le middleware d'authentification fonctionne
 
 ### Données non affichées
+
 - Vérifiez que les employés ont été générés avec le script
 - Vérifiez les logs du serveur backend
 - Vérifiez la console du navigateur pour les erreurs
@@ -168,10 +185,10 @@ Tous les endpoints employés nécessitent une authentification via JWT token. Le
 ## 🔄 Prochaines étapes
 
 Pour étendre cette fonctionnalité, vous pourriez ajouter :
+
 - Filtres avancés (par département, statut, etc.)
 - Tri par colonnes
 - Export des données
 - Import en masse
 - Cache Redis pour améliorer les performances
 - Tests unitaires et d'intégration
-

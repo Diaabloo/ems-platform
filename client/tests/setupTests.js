@@ -1,5 +1,5 @@
-import "@testing-library/jest-dom"
-import { jest } from "@jest/globals"
+import "@testing-library/jest-dom";
+import { jest } from "@jest/globals";
 
 Object.defineProperty(window, "matchMedia", {
   writable: true,
@@ -13,21 +13,24 @@ Object.defineProperty(window, "matchMedia", {
     removeEventListener: jest.fn(),
     dispatchEvent: jest.fn(),
   })),
-})
+});
 
 // Suppress console errors in tests (optional)
-const originalError = console.error
-const { beforeAll, afterAll } = require("@jest/globals")
+const originalError = console.error;
+const { beforeAll, afterAll } = require("@jest/globals");
 
 beforeAll(() => {
   console.error = (...args) => {
-    if (typeof args[0] === "string" && args[0].includes("Warning: ReactDOM.render")) {
-      return
+    if (
+      typeof args[0] === "string" &&
+      args[0].includes("Warning: ReactDOM.render")
+    ) {
+      return;
     }
-    originalError.call(console, ...args)
-  }
-})
+    originalError.call(console, ...args);
+  };
+});
 
 afterAll(() => {
-  console.error = originalError
-})
+  console.error = originalError;
+});

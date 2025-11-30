@@ -1,20 +1,27 @@
-import prisma from '../config/db.js';
-import bcrypt from 'bcrypt';
-import { findUserByEmail, verifyPassword, createUser, findAdmins, updateUser, deleteUser } from '../models/userModel.js';
-import crypto from 'crypto';
-import nodemailer from 'nodemailer';
-import jwt from 'jsonwebtoken';
-import { setOTP, verifyOTP } from '../models/verificationCode.js';
-import logger from '../utils/logger.js';
+import prisma from "../config/db.js";
+import bcrypt from "bcrypt";
+import {
+  findUserByEmail,
+  verifyPassword,
+  createUser,
+  findAdmins,
+  updateUser,
+  deleteUser,
+} from "../models/userModel.js";
+import crypto from "crypto";
+import nodemailer from "nodemailer";
+import jwt from "jsonwebtoken";
+import { setOTP, verifyOTP } from "../models/verificationCode.js";
+import logger from "../utils/logger.js";
 
 const OTP_EXPIRATION = 5 * 60 * 1000; // 5 min
 
 // --- CRUD ---
 export async function createAdmin(email, password) {
   const existing = await findUserByEmail(email);
-  if (existing) throw new Error('Email already used');
+  if (existing) throw new Error("Email already used");
 
-  return createUser(email, password, 'admin');
+  return createUser(email, password, "admin");
 }
 
 export async function getAdmins() {
@@ -25,13 +32,14 @@ export async function updateAdmin(id, email, password) {
   const data = {};
   if (email) {
     const existing = await findUserByEmail(email);
-    if (existing && existing.id !== id) throw new Error('Email already used by another user');
+    if (existing && existing.id !== id)
+      throw new Error("Email already used by another user");
     data.email = email;
   }
   if (password) {
     data.password = await bcrypt.hash(password, 10);
   }
-  if (Object.keys(data).length === 0) throw new Error('No data to update');
+  if (Object.keys(data).length === 0) throw new Error("No data to update");
   return updateUser(id, data);
 }
 
@@ -42,7 +50,7 @@ export async function deleteAdmin(id) {
 // --- Login + OTP ---
 export async function loginAdmin(email, password) {
   const admin = await findUserByEmail(email);
-  if (!admin || admin.role !== 'admin') {
+  if (!admin || admin.role !== "admin") {
     logger.error(`Login attempt failed for ${email}`);
     return null;
   }
@@ -76,7 +84,11 @@ export async function verifyAdminCode(userId, code) {
   if (!admin) return null;
 
   // Generate JWT with email for middleware checks
-  const token = jwt.sign({ userId, email: admin.email }, process.env.JWT_SECRET, { expiresIn: '1h' });
+  const token = jwt.sign(
+    { userId, email: admin.email },
+    process.env.JWT_SECRET,
+    { expiresIn: "1h" },
+  );
   logger.info(`JWT généré pour userId: ${userId}`);
   return token;
 }
@@ -84,7 +96,7 @@ export async function verifyAdminCode(userId, code) {
 // --- Send OTP code in email ---
 async function sendOTPEmail(email, code) {
   const transporter = nodemailer.createTransport({
-    service: 'gmail',
+    service: "gmail",
     auth: {
       user: process.env.EMAIL_USER,
       pass: process.env.EMAIL_PASS,
@@ -195,13 +207,11 @@ async function sendOTPEmail(email, code) {
     </html>
   `;
 
-
-
   try {
     await transporter.sendMail({
       from: `"super admin" <${process.env.EMAIL_USER}>`,
       to: email,
-      subject: 'Your verification code',
+      subject: "Your verification code",
       html: htmlTemplate,
     });
     logger.info(`Email OTP send for ${email}`);

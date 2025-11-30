@@ -47,7 +47,7 @@ export default function LoginPage() {
     }
   };
 
-const handleVerify = async (e: React.FormEvent) => {
+  const handleVerify = async (e: React.FormEvent) => {
     e.preventDefault();
     setError("");
     console.log("Sending verify request:", { userId, code: verificationCode });
@@ -71,7 +71,11 @@ const handleVerify = async (e: React.FormEvent) => {
       // Store JWT token (always store it for the session)
       localStorage.setItem("token", data.token);
       // Update Zustand store
-      console.log("Calling login with:", { email, token: data.token, userId: userId?.toString() }); // Debug
+      console.log("Calling login with:", {
+        email,
+        token: data.token,
+        userId: userId?.toString(),
+      }); // Debug
       const success = login(email, data.token, userId!.toString());
       console.log("Login function returned:", success); // Debug
       if (success) {
@@ -85,8 +89,6 @@ const handleVerify = async (e: React.FormEvent) => {
       setError("Erreur réseau. Veuillez réessayer.");
     }
   };
-
-
 
   return (
     <div className="flex min-h-screen items-center justify-center bg-background p-4">
@@ -106,7 +108,9 @@ const handleVerify = async (e: React.FormEvent) => {
           <div className="mb-6">
             <div className="mb-3 flex items-center gap-2">
               <Shield className="h-5 w-5 text-primary" />
-              <h1 className="text-2xl font-bold text-foreground text-balance">Connexion Admin</h1>
+              <h1 className="text-2xl font-bold text-foreground text-balance">
+                Connexion Admin
+              </h1>
             </div>
             <p className="text-sm text-muted-foreground">
               {showVerification
@@ -116,14 +120,19 @@ const handleVerify = async (e: React.FormEvent) => {
           </div>
 
           {error && (
-            <div className="mb-4 rounded-lg bg-destructive/10 p-3 text-sm text-destructive">{error}</div>
+            <div className="mb-4 rounded-lg bg-destructive/10 p-3 text-sm text-destructive">
+              {error}
+            </div>
           )}
 
           {!showVerification ? (
             <form onSubmit={handleLogin} className="space-y-4">
               {/* Email */}
               <div>
-                <label htmlFor="email" className="mb-2 block text-sm font-medium text-foreground">
+                <label
+                  htmlFor="email"
+                  className="mb-2 block text-sm font-medium text-foreground"
+                >
                   Email Admin
                 </label>
                 <div className="relative">
@@ -141,7 +150,10 @@ const handleVerify = async (e: React.FormEvent) => {
 
               {/* Password */}
               <div>
-                <label htmlFor="password" className="mb-2 block text-sm font-medium text-foreground">
+                <label
+                  htmlFor="password"
+                  className="mb-2 block text-sm font-medium text-foreground"
+                >
                   Mot de passe
                 </label>
                 <div className="relative">
@@ -166,7 +178,10 @@ const handleVerify = async (e: React.FormEvent) => {
                   onChange={(e) => setRememberMe(e.target.checked)}
                   className="h-4 w-4 rounded border-input bg-background text-primary focus:ring-2 focus:ring-ring"
                 />
-                <label htmlFor="remember" className="ml-2 text-sm text-muted-foreground">
+                <label
+                  htmlFor="remember"
+                  className="ml-2 text-sm text-muted-foreground"
+                >
                   Se souvenir de moi
                 </label>
               </div>
@@ -183,19 +198,28 @@ const handleVerify = async (e: React.FormEvent) => {
             <form onSubmit={handleVerify} className="space-y-4">
               {/* Verification Code */}
               <div>
-                <label htmlFor="code" className="mb-2 block text-sm font-medium text-foreground">
+                <label
+                  htmlFor="code"
+                  className="mb-2 block text-sm font-medium text-foreground"
+                >
                   Code de vérification
                 </label>
                 <input
                   id="code"
                   type="text"
                   value={verificationCode}
-                  onChange={(e) => setVerificationCode(e.target.value.replace(/\D/g, "").slice(0, 6))}
+                  onChange={(e) =>
+                    setVerificationCode(
+                      e.target.value.replace(/\D/g, "").slice(0, 6),
+                    )
+                  }
                   placeholder="000000"
                   maxLength={6}
                   className="h-11 w-full rounded-lg border border-input bg-background px-4 text-center text-2xl font-mono tracking-widest text-foreground placeholder:text-muted-foreground focus:border-ring focus:outline-none focus:ring-2 focus:ring-ring"
                 />
-                <p className="mt-2 text-xs text-muted-foreground">Entrez le code à 6 chiffres envoyé à {email}</p>
+                <p className="mt-2 text-xs text-muted-foreground">
+                  Entrez le code à 6 chiffres envoyé à {email}
+                </p>
               </div>
 
               {/* Submit */}

@@ -1,21 +1,27 @@
-"use client"
+"use client";
 
-import type React from "react"
-import { useState, useEffect } from "react"
-import { useStore, type Payment } from "@/lib/store"
-import { X } from "lucide-react"
-import { toast } from "sonner"
+import type React from "react";
+import { useState, useEffect } from "react";
+import { useStore, type Payment } from "@/lib/store";
+import { X } from "lucide-react";
+import { toast } from "sonner";
 
 interface PaymentFormModalProps {
-  isOpen: boolean
-  onClose: () => void
-  employeeId: string
-  employeeName: string
-  payment?: Payment | null
+  isOpen: boolean;
+  onClose: () => void;
+  employeeId: string;
+  employeeName: string;
+  payment?: Payment | null;
 }
 
-export function PaymentFormModal({ isOpen, onClose, employeeId, employeeName, payment }: PaymentFormModalProps) {
-  const { addPayment, updatePayment } = useStore()
+export function PaymentFormModal({
+  isOpen,
+  onClose,
+  employeeId,
+  employeeName,
+  payment,
+}: PaymentFormModalProps) {
+  const { addPayment, updatePayment } = useStore();
 
   const [formData, setFormData] = useState({
     date: "",
@@ -23,7 +29,7 @@ export function PaymentFormModal({ isOpen, onClose, employeeId, employeeName, pa
     period: "",
     status: "Pending" as Payment["status"],
     method: "Bank Transfer" as Payment["method"],
-  })
+  });
 
   useEffect(() => {
     if (payment) {
@@ -33,50 +39,57 @@ export function PaymentFormModal({ isOpen, onClose, employeeId, employeeName, pa
         period: payment.period,
         status: payment.status,
         method: payment.method,
-      })
+      });
     } else {
       // Set default values for new payment
-      const now = new Date()
-      const currentMonth = now.toLocaleDateString("en-US", { month: "long", year: "numeric" })
+      const now = new Date();
+      const currentMonth = now.toLocaleDateString("en-US", {
+        month: "long",
+        year: "numeric",
+      });
       setFormData({
         date: now.toISOString().split("T")[0],
         amount: 0,
         period: currentMonth,
         status: "Pending",
         method: "Bank Transfer",
-      })
+      });
     }
-  }, [payment, isOpen])
+  }, [payment, isOpen]);
 
-  if (!isOpen) return null
+  if (!isOpen) return null;
 
   const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault()
+    e.preventDefault();
 
     if (payment) {
-      updatePayment(payment.id, formData)
+      updatePayment(payment.id, formData);
       toast.success("Payment updated successfully", {
         description: `Payment for ${employeeName} has been updated.`,
-      })
+      });
     } else {
       addPayment({
         ...formData,
         employeeId,
-      })
+      });
       toast.success("Payment added successfully", {
-        description: `Payment of $${formData.amount.toFixed(2)} has been recorded.`,
-      })
+        description: `Payment of $${formData.amount.toFixed(
+          2,
+        )} has been recorded.`,
+      });
     }
 
-    onClose()
-  }
+    onClose();
+  };
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
       <div className="w-full max-w-md rounded-xl border border-border bg-card shadow-lg">
         <div className="flex items-center justify-between border-b border-border p-6">
           <div>
-            <h2 className="text-xl font-semibold text-foreground">{payment ? "Edit Payment" : "Add Payment"}</h2>
+            <h2 className="text-xl font-semibold text-foreground">
+              {payment ? "Edit Payment" : "Add Payment"}
+            </h2>
             <p className="mt-1 text-sm text-muted-foreground">{employeeName}</p>
           </div>
           <button
@@ -90,35 +103,50 @@ export function PaymentFormModal({ isOpen, onClose, employeeId, employeeName, pa
         <form onSubmit={handleSubmit} className="p-6">
           <div className="space-y-4">
             <div>
-              <label className="mb-2 block text-sm font-medium text-foreground">Payment Date</label>
+              <label className="mb-2 block text-sm font-medium text-foreground">
+                Payment Date
+              </label>
               <input
                 type="date"
                 value={formData.date}
-                onChange={(e) => setFormData({ ...formData, date: e.target.value })}
+                onChange={(e) =>
+                  setFormData({ ...formData, date: e.target.value })
+                }
                 required
                 className="h-11 w-full rounded-lg border border-input bg-background px-4 text-sm text-foreground focus:border-ring focus:outline-none focus:ring-2 focus:ring-ring"
               />
             </div>
 
             <div>
-              <label className="mb-2 block text-sm font-medium text-foreground">Amount ($)</label>
+              <label className="mb-2 block text-sm font-medium text-foreground">
+                Amount ($)
+              </label>
               <input
                 type="number"
                 min="0"
                 step="0.01"
                 value={formData.amount}
-                onChange={(e) => setFormData({ ...formData, amount: Number.parseFloat(e.target.value) })}
+                onChange={(e) =>
+                  setFormData({
+                    ...formData,
+                    amount: Number.parseFloat(e.target.value),
+                  })
+                }
                 required
                 className="h-11 w-full rounded-lg border border-input bg-background px-4 text-sm text-foreground focus:border-ring focus:outline-none focus:ring-2 focus:ring-ring"
               />
             </div>
 
             <div>
-              <label className="mb-2 block text-sm font-medium text-foreground">Period</label>
+              <label className="mb-2 block text-sm font-medium text-foreground">
+                Period
+              </label>
               <input
                 type="text"
                 value={formData.period}
-                onChange={(e) => setFormData({ ...formData, period: e.target.value })}
+                onChange={(e) =>
+                  setFormData({ ...formData, period: e.target.value })
+                }
                 placeholder="e.g., October 2025"
                 required
                 className="h-11 w-full rounded-lg border border-input bg-background px-4 text-sm text-foreground focus:border-ring focus:outline-none focus:ring-2 focus:ring-ring"
@@ -126,10 +154,17 @@ export function PaymentFormModal({ isOpen, onClose, employeeId, employeeName, pa
             </div>
 
             <div>
-              <label className="mb-2 block text-sm font-medium text-foreground">Payment Method</label>
+              <label className="mb-2 block text-sm font-medium text-foreground">
+                Payment Method
+              </label>
               <select
                 value={formData.method}
-                onChange={(e) => setFormData({ ...formData, method: e.target.value as Payment["method"] })}
+                onChange={(e) =>
+                  setFormData({
+                    ...formData,
+                    method: e.target.value as Payment["method"],
+                  })
+                }
                 className="h-11 w-full rounded-lg border border-input bg-background px-4 text-sm text-foreground focus:border-ring focus:outline-none focus:ring-2 focus:ring-ring"
               >
                 <option value="Bank Transfer">Bank Transfer</option>
@@ -139,10 +174,17 @@ export function PaymentFormModal({ isOpen, onClose, employeeId, employeeName, pa
             </div>
 
             <div>
-              <label className="mb-2 block text-sm font-medium text-foreground">Status</label>
+              <label className="mb-2 block text-sm font-medium text-foreground">
+                Status
+              </label>
               <select
                 value={formData.status}
-                onChange={(e) => setFormData({ ...formData, status: e.target.value as Payment["status"] })}
+                onChange={(e) =>
+                  setFormData({
+                    ...formData,
+                    status: e.target.value as Payment["status"],
+                  })
+                }
                 className="h-11 w-full rounded-lg border border-input bg-background px-4 text-sm text-foreground focus:border-ring focus:outline-none focus:ring-2 focus:ring-ring"
               >
                 <option value="Pending">Pending</option>
@@ -170,5 +212,5 @@ export function PaymentFormModal({ isOpen, onClose, employeeId, employeeName, pa
         </form>
       </div>
     </div>
-  )
+  );
 }

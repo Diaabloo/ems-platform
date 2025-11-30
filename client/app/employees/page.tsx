@@ -1,42 +1,54 @@
 // frontend/app/employees/page.tsx
-"use client"
+"use client";
 
-import { useEffect, useState } from "react"
-import { useRouter } from "next/navigation"
-import Link from "next/link"
-import { Sidebar } from "@/components/sidebar"
-import { Navbar } from "@/components/navbar"
+import { useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
+import Link from "next/link";
+import { Sidebar } from "@/components/sidebar";
+import { Navbar } from "@/components/navbar";
 // import { useStore, type Employee } from "@/lib/store"
-import { useStore } from "@/lib/store"
-import type { Employee } from "@/lib/store"
-import { Search, Plus, Edit, Trash2, Eye, ChevronLeft, ChevronRight } from "lucide-react"
-import { EmployeeModal } from "@/components/employee-modal"
-import { toast } from "sonner"
+import { useStore } from "@/lib/store";
+import type { Employee } from "@/lib/store";
+import {
+  Search,
+  Plus,
+  Edit,
+  Trash2,
+  Eye,
+  ChevronLeft,
+  ChevronRight,
+} from "lucide-react";
+import { EmployeeModal } from "@/components/employee-modal";
+import { toast } from "sonner";
 
 export default function EmployeesPage() {
-  const router = useRouter()
-  const { isAuthenticated, deleteEmployee, setEmployees } = useStore()
+  const router = useRouter();
+  const { isAuthenticated, deleteEmployee, setEmployees } = useStore();
 
   // Debug store values
-  console.log("useStore values:", { isAuthenticated, deleteEmployee, setEmployees })
+  console.log("useStore values:", {
+    isAuthenticated,
+    deleteEmployee,
+    setEmployees,
+  });
 
-  const [searchQuery, setSearchQuery] = useState("")
-  const [currentPage, setCurrentPage] = useState(1)
-  const [isModalOpen, setIsModalOpen] = useState(false)
-  const [editingEmployee, setEditingEmployee] = useState<Employee | null>(null)
-  const [apiEmployees, setApiEmployees] = useState<Employee[]>([])
-  const [loading, setLoading] = useState(false)
-  const [error, setError] = useState<string | null>(null)
-  const [totalPages, setTotalPages] = useState(1)
-  const itemsPerPage = 10
+  const [searchQuery, setSearchQuery] = useState("");
+  const [currentPage, setCurrentPage] = useState(1);
+  const [isModalOpen, setIsModalOpen] = useState(false);
+  const [editingEmployee, setEditingEmployee] = useState<Employee | null>(null);
+  const [apiEmployees, setApiEmployees] = useState<Employee[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [totalPages, setTotalPages] = useState(1);
+  const itemsPerPage = 10;
 
   useEffect(() => {
     if (!isAuthenticated) {
-      router.push("/login")
-      return
+      router.push("/login");
+      return;
     }
 
-    const controller = new AbortController()
+    const controller = new AbortController();
     // app/employees/page.tsx
     const fetchData = async () => {
       try {
@@ -48,30 +60,35 @@ export default function EmployeesPage() {
           ...(searchQuery && { search: searchQuery }),
         });
 
-        const res = await fetch(`http://localhost:5000/api/employees?${params.toString()}`, {
-          headers: {
-            "Content-Type": "application/json",
-            Authorization: `Bearer ${localStorage.getItem("token") || ""}`,
+        const res = await fetch(
+          `http://localhost:5000/api/employees?${params.toString()}`,
+          {
+            headers: {
+              "Content-Type": "application/json",
+              Authorization: `Bearer ${localStorage.getItem("token") || ""}`,
+            },
+            signal: controller.signal,
           },
-          signal: controller.signal,
-        });
+        );
 
         if (!res.ok) throw new Error(`HTTP ${res.status}`);
         const json = await res.json();
         // console.log("Raw API response:", JSON.stringify(json, null, 2)); // Log for debugging
-        const formattedEmployees: Employee[] = json.data.employees.map((emp: any) => ({
-          id: emp.id,
-          fullName: emp.fullName || "Unknown", // Use fullName from API
-          email: emp.email,
-          phone: emp.phone,
-          department: emp.department?.name || 'Aucun',
-          departmentColor: emp.department?.color || '#9ca3af',
-          role: emp.role,
-          status: emp.status, // Already formatted as "Active" or "Inactive" by backend
-          hireDate: emp.hireDate,
-          salary: emp.salary,
-          avatar: emp.avatar,
-        }));
+        const formattedEmployees: Employee[] = json.data.employees.map(
+          (emp: any) => ({
+            id: emp.id,
+            fullName: emp.fullName || "Unknown", // Use fullName from API
+            email: emp.email,
+            phone: emp.phone,
+            department: emp.department?.name || "Aucun",
+            departmentColor: emp.department?.color || "#9ca3af",
+            role: emp.role,
+            status: emp.status, // Already formatted as "Active" or "Inactive" by backend
+            hireDate: emp.hireDate,
+            salary: emp.salary,
+            avatar: emp.avatar,
+          }),
+        );
         console.log("Formatted employees:", formattedEmployees);
         setApiEmployees(formattedEmployees);
         setTotalPages(json.data.pagination.totalPages);
@@ -91,35 +108,42 @@ export default function EmployeesPage() {
       }
     };
 
-    fetchData()
-    return () => controller.abort()
-  }, [isAuthenticated, router, currentPage, itemsPerPage, searchQuery, setEmployees])
+    fetchData();
+    return () => controller.abort();
+  }, [
+    isAuthenticated,
+    router,
+    currentPage,
+    itemsPerPage,
+    searchQuery,
+    setEmployees,
+  ]);
 
-  if (!isAuthenticated) return null
+  if (!isAuthenticated) return null;
 
   const handlePageChange = (newPage: number) => {
-    setCurrentPage(newPage)
-  }
+    setCurrentPage(newPage);
+  };
 
   const handleEdit = (employee: Employee) => {
-    setEditingEmployee(employee)
-    setIsModalOpen(true)
-  }
+    setEditingEmployee(employee);
+    setIsModalOpen(true);
+  };
 
   const handleDelete = (id: number) => {
-    const employee = apiEmployees.find((emp) => emp.id === id)
+    const employee = apiEmployees.find((emp) => emp.id === id);
     if (confirm("Are you sure you want to delete this employee?")) {
-      deleteEmployee(id)
+      deleteEmployee(id);
       toast.success("Employee deleted", {
         description: `${employee?.fullName} has been removed from the system.`,
-      })
+      });
     }
-  }
+  };
 
   const handleAddNew = () => {
-    setEditingEmployee(null)
-    setIsModalOpen(true)
-  }
+    setEditingEmployee(null);
+    setIsModalOpen(true);
+  };
 
   return (
     <div className="flex h-screen bg-background">
@@ -130,7 +154,9 @@ export default function EmployeesPage() {
           <div className="mb-6 flex items-center justify-between">
             <div>
               <h1 className="text-3xl font-bold text-foreground">Employees</h1>
-              <p className="mt-1 text-sm text-muted-foreground">Manage your organizations employees</p>
+              <p className="mt-1 text-sm text-muted-foreground">
+                Manage your organizations employees
+              </p>
             </div>
             <button
               onClick={handleAddNew}
@@ -159,11 +185,21 @@ export default function EmployeesPage() {
               <table className="w-full">
                 <thead>
                   <tr className="border-b border-border">
-                    <th className="px-6 py-4 text-left text-sm font-medium text-muted-foreground">Employee</th>
-                    <th className="px-6 py-4 text-left text-sm font-medium text-muted-foreground">Department</th>
-                    <th className="px-6 py-4 text-left text-sm font-medium text-muted-foreground">Role</th>
-                    <th className="px-6 py-4 text-left text-sm font-medium text-muted-foreground">Status</th>
-                    <th className="px-6 py-4 text-right text-sm font-medium text-muted-foreground">Actions</th>
+                    <th className="px-6 py-4 text-left text-sm font-medium text-muted-foreground">
+                      Employee
+                    </th>
+                    <th className="px-6 py-4 text-left text-sm font-medium text-muted-foreground">
+                      Department
+                    </th>
+                    <th className="px-6 py-4 text-left text-sm font-medium text-muted-foreground">
+                      Role
+                    </th>
+                    <th className="px-6 py-4 text-left text-sm font-medium text-muted-foreground">
+                      Status
+                    </th>
+                    <th className="px-6 py-4 text-right text-sm font-medium text-muted-foreground">
+                      Actions
+                    </th>
                   </tr>
                 </thead>
                 <tbody>
@@ -171,7 +207,9 @@ export default function EmployeesPage() {
                     <tr>
                       <td colSpan={5} className="px-6 py-12 text-center">
                         <div className="flex flex-col items-center gap-2">
-                          <p className="text-sm text-muted-foreground">Loading employees...</p>
+                          <p className="text-sm text-muted-foreground">
+                            Loading employees...
+                          </p>
                         </div>
                       </td>
                     </tr>
@@ -179,8 +217,12 @@ export default function EmployeesPage() {
                     <tr>
                       <td colSpan={5} className="px-6 py-12 text-center">
                         <div className="flex flex-col items-center gap-2">
-                          <p className="text-sm font-medium text-destructive">Error loading employees</p>
-                          <p className="text-sm text-muted-foreground">{error}</p>
+                          <p className="text-sm font-medium text-destructive">
+                            Error loading employees
+                          </p>
+                          <p className="text-sm text-muted-foreground">
+                            {error}
+                          </p>
                         </div>
                       </td>
                     </tr>
@@ -188,24 +230,37 @@ export default function EmployeesPage() {
                     <tr>
                       <td colSpan={5} className="px-6 py-12 text-center">
                         <div className="flex flex-col items-center gap-2">
-                          <p className="text-sm font-medium text-foreground">No employees found</p>
+                          <p className="text-sm font-medium text-foreground">
+                            No employees found
+                          </p>
                           <p className="text-sm text-muted-foreground">
-                            {searchQuery ? "Try adjusting your search" : "Get started by adding your first employee"}
+                            {searchQuery
+                              ? "Try adjusting your search"
+                              : "Get started by adding your first employee"}
                           </p>
                         </div>
                       </td>
                     </tr>
                   ) : (
                     apiEmployees.map((employee) => (
-                      <tr key={employee.id} className="border-b border-border last:border-0">
+                      <tr
+                        key={employee.id}
+                        className="border-b border-border last:border-0"
+                      >
                         <td className="px-6 py-4">
                           <div className="flex items-center gap-3">
                             <div className="flex h-10 w-10 items-center justify-center rounded-full bg-primary/20">
-                              <span className="text-sm font-medium text-primary">{employee.fullName.charAt(0)}</span>
+                              <span className="text-sm font-medium text-primary">
+                                {employee.fullName.charAt(0)}
+                              </span>
                             </div>
                             <div>
-                              <p className="font-medium text-foreground">{employee.fullName}</p>
-                              <p className="text-sm text-muted-foreground">{employee.email}</p>
+                              <p className="font-medium text-foreground">
+                                {employee.fullName}
+                              </p>
+                              <p className="text-sm text-muted-foreground">
+                                {employee.email}
+                              </p>
                             </div>
                           </div>
                         </td>
@@ -214,12 +269,16 @@ export default function EmployeesPage() {
                           <div className="flex items-center gap-1">
                             <span
                               className="inline-block m-2 w-3 h-3 rounded-full"
-                              style={{ backgroundColor: employee.departmentColor }}
+                              style={{
+                                backgroundColor: employee.departmentColor,
+                              }}
                             ></span>
                             {employee.department}
                           </div>
                         </td>
-                        <td className="px-6 py-4 text-sm text-foreground">{employee.role}</td>
+                        <td className="px-6 py-4 text-sm text-foreground">
+                          {employee.role}
+                        </td>
                         <td className="px-6 py-4">
                           <span
                             className={`inline-flex items-center rounded-full px-2.5 py-1 text-xs font-medium ${
@@ -235,7 +294,12 @@ export default function EmployeesPage() {
                           <div className="flex items-center justify-end gap-2">
                             <Link
                               href={`/employees/${employee.id}`}
-                              onClick={() => console.log("Navigating to employee ID:", employee.id)}
+                              onClick={() =>
+                                console.log(
+                                  "Navigating to employee ID:",
+                                  employee.id,
+                                )
+                              }
                               className="rounded-lg p-2 text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground"
                             >
                               <Eye className="h-4 w-4" />
@@ -294,11 +358,11 @@ export default function EmployeesPage() {
       <EmployeeModal
         isOpen={isModalOpen}
         onClose={() => {
-          setIsModalOpen(false)
-          setEditingEmployee(null)
+          setIsModalOpen(false);
+          setEditingEmployee(null);
         }}
         employee={editingEmployee}
       />
     </div>
-  )
+  );
 }
