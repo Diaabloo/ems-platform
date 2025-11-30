@@ -13,7 +13,7 @@ export const authMiddleware = async (req, res, next) => {
     }
     req.user = decoded;
     next();
-  } catch (err) {
+  } catch (_err) {
     res.status(401).json({ error: "Token invalide" });
   }
 };

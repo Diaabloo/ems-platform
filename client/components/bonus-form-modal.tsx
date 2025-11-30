@@ -9,7 +9,8 @@ import { toast } from "sonner";
 interface BonusFormModalProps {
   isOpen: boolean;
   onClose: () => void;
-  employeeId: string;
+  // employeeId: string;
+  employeeId: number;
   employeeName: string;
   bonus?: Bonus | null;
 }

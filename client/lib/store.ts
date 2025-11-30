@@ -51,6 +51,7 @@ export interface Bonus {
 
 export interface Employee {
   id: number;
+  fullName: string;
   first_name?: string;
   last_name?: string;
   email: string;
@@ -60,6 +61,7 @@ export interface Employee {
   status: "Active" | "Inactive";
   hireDate: string;
   salary?: number;
+  departmentColor?: string;
 }
 
 export interface Department {

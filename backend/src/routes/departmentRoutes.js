@@ -26,7 +26,7 @@ router.get("/", async (req, res) => {
     }));
 
     res.json({ data: formatted });
-  } catch (err) {
+  } catch (_err) {
     res.status(500).json({ error: "Failed to fetch departments" });
   }
 });

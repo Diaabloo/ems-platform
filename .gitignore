@@ -11,3 +11,4 @@ postgres-data
 # IDE
 .vscode/
 .DS_Store
+node_modules/.cache/prettier/

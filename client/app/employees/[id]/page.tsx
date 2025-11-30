@@ -1048,6 +1048,7 @@ export default function EmployeeDetailPage() {
               setEditingAbsence(null);
             }}
             employeeId={employee.id}
+            employeeName={employee.fullName}
             absence={editingAbsence}
           />
           <PaymentFormModal
@@ -1057,6 +1058,7 @@ export default function EmployeeDetailPage() {
               setEditingPayment(null);
             }}
             employeeId={employee.id}
+            employeeName={employee.fullName}
             payment={editingPayment}
           />
           <BonusFormModal
@@ -1066,6 +1068,7 @@ export default function EmployeeDetailPage() {
               setEditingBonus(null);
             }}
             employeeId={employee.id}
+            employeeName={employee.fullName}
             bonus={editingBonus}
           />
           <LeaveFormModal
@@ -1075,6 +1078,7 @@ export default function EmployeeDetailPage() {
               setEditingLeave(null);
             }}
             employeeId={employee.id}
+            employeeName={employee.fullName}
             leave={editingLeave}
           />
 

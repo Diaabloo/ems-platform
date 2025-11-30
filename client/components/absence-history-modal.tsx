@@ -6,7 +6,8 @@ import { X, Calendar, CheckCircle, AlertCircle } from "lucide-react";
 interface AbsenceHistoryModalProps {
   isOpen: boolean;
   onClose: () => void;
-  employeeId: string;
+  // employeeId: string;
+  employeeId: number;
   employeeName: string;
 }
 

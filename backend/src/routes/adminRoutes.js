@@ -1,7 +1,7 @@
 import express from "express";
 import {
-  createAdmin,
-  getAdmins,
+  // createAdmin,
+  // getAdmins,
   updateAdmin,
   deleteAdmin,
   loginAdmin,
@@ -39,7 +39,7 @@ router.post("/create-first-admin", async (req, res) => {
       id: admin.id,
     });
   } catch (err) {
-    console.error("ERREUR CREATE ADMIN:", err); // LOG DÉTAILLÉ
+    // console.error("ERREUR CREATE ADMIN:", err); // LOG DÉTAILLÉ
     res.status(500).json({
       error: "Erreur création admin",
       details: err.message,

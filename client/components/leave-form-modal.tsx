@@ -9,7 +9,8 @@ import { toast } from "sonner";
 interface LeaveFormModalProps {
   isOpen: boolean;
   onClose: () => void;
-  employeeId: string;
+  // employeeId: string;
+  employeeId: number;
   employeeName: string;
   leave?: Leave | null;
 }
