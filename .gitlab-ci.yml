@@ -121,8 +121,11 @@ variables:
 
 .trivy_template: &trivy_template
   image: aquasec/trivy:latest
-  script:
-    - echo "🔧 Trivy Security Scanner Setup"
+  before_script:
+    - echo "🔧 Installing Trivy..."
+    - apk add --no-cache curl
+    - curl -sfL https://raw.githubusercontent.com/aquasecurity/trivy/main/contrib/install.sh | sh -s -- -b /usr/local/bin
+    - echo "✅ Trivy installed:"
     - trivy --version
   tags:
     - windows
