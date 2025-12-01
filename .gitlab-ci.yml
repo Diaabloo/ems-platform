@@ -121,7 +121,7 @@ variables:
 
 .trivy_template: &trivy_template
   image: aquasec/trivy:latest
-  before_script:
+  script:
     - echo "🔧 Trivy Security Scanner Setup"
     - trivy --version
   tags:
