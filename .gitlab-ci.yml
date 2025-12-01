@@ -1,3 +1,7 @@
+# ============================================
+# EMS Platform - CI/CD Pipeline with SonarQube
+# ============================================
+
 stages:
   - setup
   - quality
@@ -28,6 +32,8 @@ variables:
   TEST_TIMEOUT: "10000"
   NODE_ENV: "ci"
   CI: "true"
+  SONAR_USER_HOME: "${CI_PROJECT_DIR}/.sonar"
+  GIT_DEPTH: "0"
 
 # === TEMPLATES ===
 .docker_template: &docker_template
@@ -110,7 +116,15 @@ variables:
     - ems-platform
 
 .sonarqube_template: &sonarqube_template
-  image: sonarsource/sonar-scanner-cli:latest
+  image:
+    name: sonarsource/sonar-scanner-cli:latest
+    entrypoint: [""]
+  variables:
+    SONAR_USER_HOME: "${CI_PROJECT_DIR}/.sonar"
+  cache:
+    key: "${CI_JOB_NAME}"
+    paths:
+      - .sonar/cache
   before_script:
     - echo "🔧 SonarQube Scanner Setup"
     - sonar-scanner --version
@@ -349,30 +363,148 @@ trivy_filesystem_scan:
     - if: '$CI_COMMIT_REF_NAME == "dev" || $CI_COMMIT_REF_NAME == "main"'
   allow_failure: true
 
-# === ANALYSIS STAGE ===
-sonarqube_analysis:
+# === ANALYSIS STAGE (SONARQUBE) ===
+sonarqube_prepare:
+  stage: analysis
+  image: alpine:latest
+  script:
+    - |
+      echo "📋 Préparation de l'analyse SonarQube"
+      echo "📝 Génération du token SonarQube automatiquement"
+      echo "💡 Note: Assurez-vous d'avoir créé un projet dans SonarQube"
+      echo "🌐 URL SonarQube: ${SONAR_HOST_URL:-Non défini}"
+      echo "🔑 Pour générer un token:"
+      echo "   1. Connectez-vous à ${SONAR_HOST_URL:-localhost:9000}"
+      echo "   2. Allez dans My Account > Security"
+      echo "   3. Générer un token nommé 'gitlab-ci'"
+      echo "   4. Ajoutez-le comme variable CI/CD 'SONAR_TOKEN'"
+      echo ""
+      echo "📊 Projet analysé: ems-platform"
+      echo "📅 Commit: ${CI_COMMIT_SHA}"
+      echo "👤 Auteur: ${GITLAB_USER_NAME:-Non défini}"
+      echo "📄 Message: ${CI_COMMIT_MESSAGE}"
+  rules:
+    - if: '$CI_COMMIT_REF_NAME == "dev" || $CI_COMMIT_REF_NAME == "main"'
+      when: always
+
+sonarqube_frontend:
   stage: analysis
   <<: *sonarqube_template
   dependencies:
     - install_frontend_deps
-    - install_backend_deps
+    - test_frontend
   script:
     - |
-      echo "📊 SonarQube Analysis..."
-      # Configuration SonarQube (à adapter selon votre setup)
+      echo "📊 Analyse SonarQube - Frontend"
+
+      if [ -z "$SONAR_HOST_URL" ]; then
+        echo "⚠️ SONAR_HOST_URL non défini - utilisation de http://host.docker.internal:9000"
+        export SONAR_HOST_URL="http://host.docker.internal:9000"
+      fi
+
+      echo "🔗 Connexion à: ${SONAR_HOST_URL}"
+
+      if [ -z "$SONAR_TOKEN" ]; then
+        echo "❌ SONAR_TOKEN non défini"
+        echo "📋 Configurez la variable CI/CD:"
+        echo "   Nom: SONAR_TOKEN"
+        echo "   Valeur: Votre token SonarQube"
+        echo "   Protection: ✅"
+        echo "   Masquage: ✅"
+        exit 1
+      fi
+
+      # Analyse frontend
+      cd client
       sonar-scanner \
-        -Dsonar.projectKey=ems-platform \
-        -Dsonar.sources=.,client/src,backend \
+        -Dsonar.projectKey=ems-platform-frontend \
+        -Dsonar.projectName="EMS Platform - Frontend" \
+        -Dsonar.projectVersion=${CI_COMMIT_SHORT_SHA} \
+        -Dsonar.sources=src \
         -Dsonar.host.url=${SONAR_HOST_URL} \
         -Dsonar.login=${SONAR_TOKEN} \
-        -Dsonar.coverage.exclusions=**/node_modules/**,**/*.test.js,**/*.spec.js \
-        -Dsonar.javascript.lcov.reportPaths=client/coverage/lcov.info,backend/coverage/lcov.info
-      echo "✅ SonarQube analysis completed"
+        -Dsonar.javascript.lcov.reportPaths=coverage/lcov.info \
+        -Dsonar.coverage.exclusions=**/*.test.js,**/*.spec.js,**/node_modules/** \
+        -Dsonar.qualitygate.wait=true \
+        -Dsonar.scm.provider=git \
+        -Dsonar.gitlab.commit_sha=${CI_COMMIT_SHA} \
+        -Dsonar.gitlab.ref_name=${CI_COMMIT_REF_NAME} \
+        -Dsonar.analysis.commitMessage="${CI_COMMIT_MESSAGE}" \
+        -Dsonar.analysis.author="${GITLAB_USER_NAME:-GitLab CI}" \
+        -Dsonar.analysis.branch="${CI_COMMIT_REF_NAME}" \
+        -Dsonar.analysis.projectKey="ems-platform-frontend"
+
+      echo "✅ Analyse SonarQube frontend terminée"
+      echo "📈 Rapport disponible sur: ${SONAR_HOST_URL}/dashboard?id=ems-platform-frontend"
+  artifacts:
+    reports:
+      codequality: gl-sonar-frontend.json
+    paths:
+      - client/.scannerwork/
+    expire_in: 1 week
+    when: always
   rules:
     - if: '$CI_COMMIT_REF_NAME == "dev" || $CI_COMMIT_REF_NAME == "main"'
-      exists:
-        - SONAR_HOST_URL
-        - SONAR_TOKEN
+  allow_failure: true
+
+sonarqube_backend:
+  stage: analysis
+  <<: *sonarqube_template
+  dependencies:
+    - install_backend_deps
+    - test_backend
+  script:
+    - |
+      echo "📊 Analyse SonarQube - Backend"
+
+      if [ -z "$SONAR_HOST_URL" ]; then
+        echo "⚠️ SONAR_HOST_URL non défini - utilisation de http://host.docker.internal:9000"
+        export SONAR_HOST_URL="http://host.docker.internal:9000"
+      fi
+
+      echo "🔗 Connexion à: ${SONAR_HOST_URL}"
+
+      if [ -z "$SONAR_TOKEN" ]; then
+        echo "❌ SONAR_TOKEN non défini"
+        echo "📋 Configurez la variable CI/CD:"
+        echo "   Nom: SONAR_TOKEN"
+        echo "   Valeur: Votre token SonarQube"
+        exit 1
+      fi
+
+      # Analyse backend
+      cd backend
+      sonar-scanner \
+        -Dsonar.projectKey=ems-platform-backend \
+        -Dsonar.projectName="EMS Platform - Backend" \
+        -Dsonar.projectVersion=${CI_COMMIT_SHORT_SHA} \
+        -Dsonar.sources=. \
+        -Dsonar.exclusions=node_modules/**,**/*.test.js,**/*.spec.js,coverage/** \
+        -Dsonar.host.url=${SONAR_HOST_URL} \
+        -Dsonar.login=${SONAR_TOKEN} \
+        -Dsonar.javascript.lcov.reportPaths=coverage/lcov.info \
+        -Dsonar.tests=. \
+        -Dsonar.test.inclusions=**/*.test.js,**/*.spec.js \
+        -Dsonar.qualitygate.wait=true \
+        -Dsonar.scm.provider=git \
+        -Dsonar.gitlab.commit_sha=${CI_COMMIT_SHA} \
+        -Dsonar.gitlab.ref_name=${CI_COMMIT_REF_NAME} \
+        -Dsonar.analysis.commitMessage="${CI_COMMIT_MESSAGE}" \
+        -Dsonar.analysis.author="${GITLAB_USER_NAME:-GitLab CI}" \
+        -Dsonar.analysis.branch="${CI_COMMIT_REF_NAME}" \
+        -Dsonar.analysis.projectKey="ems-platform-backend"
+
+      echo "✅ Analyse SonarQube backend terminée"
+      echo "📈 Rapport disponible sur: ${SONAR_HOST_URL}/dashboard?id=ems-platform-backend"
+  artifacts:
+    reports:
+      codequality: gl-sonar-backend.json
+    paths:
+      - backend/.scannerwork/
+    expire_in: 1 week
+    when: always
+  rules:
+    - if: '$CI_COMMIT_REF_NAME == "dev" || $CI_COMMIT_REF_NAME == "main"'
   allow_failure: true
 
 # === TEST STAGE ===
@@ -404,6 +536,8 @@ test_frontend:
     paths:
       - client/coverage/
       - client/test-results/
+    reports:
+      junit: client/test-results/*.xml
     expire_in: 1 week
     when: always
   rules:
@@ -426,6 +560,8 @@ test_backend:
   artifacts:
     paths:
       - backend/coverage/
+    reports:
+      junit: backend/test-results/*.xml
     expire_in: 1 week
     when: always
   rules:
@@ -439,6 +575,7 @@ build_frontend_image:
   <<: *docker_template
   dependencies:
     - test_frontend
+    - sonarqube_frontend
   script:
     - |
       echo "🏗️ Building Frontend image..."
@@ -455,6 +592,7 @@ build_backend_image:
   <<: *docker_template
   dependencies:
     - test_backend
+    - sonarqube_backend
   script:
     - |
       echo "🏗️ Building Backend image..."
@@ -547,80 +685,93 @@ trivy_scan_db:
     - if: '$CI_COMMIT_REF_NAME == "dev" || $CI_COMMIT_REF_NAME == "main"'
   allow_failure: true
 
-# === INFRASTRUCTURE STAGE (COMMENTÉ) ===
-# infrastructure_terraform:
-#   stage: infrastructure
-#   image: hashicorp/terraform:latest
-#   script:
-#     - |
-#       echo "🏗️ Terraform Infrastructure Deployment"
-#       cd terraform
-#       terraform init
-#       terraform validate
-#       terraform plan -out=plan.tfplan
-#       # terraform apply -auto-approve plan.tfplan
-#       echo "✅ Infrastructure deployment ready"
-#   rules:
-#     - if: '$CI_COMMIT_REF_NAME == "main"'
-#       when: manual
-#   tags:
-#     - windows
-#     - docker
-#     - ems-platform
+# === INFRASTRUCTURE STAGE ===
+infrastructure_terraform:
+  stage: infrastructure
+  image: hashicorp/terraform:latest
+  script:
+    - |
+      echo "🏗️ Terraform Infrastructure Deployment"
+      echo "📁 Checking if terraform directory exists..."
+      if [ -d "terraform" ]; then
+        cd terraform
+        terraform init
+        terraform validate
+        terraform plan -out=plan.tfplan
+        echo "✅ Infrastructure plan generated"
+      else
+        echo "⚠️ No terraform directory found, skipping..."
+      fi
+  rules:
+    - if: '$CI_COMMIT_REF_NAME == "main"'
+      when: manual
+  tags:
+    - windows
+    - docker
+    - ems-platform
 
-# infrastructure_kubernetes:
-#   stage: infrastructure
-#   image: bitnami/kubectl:latest
-#   script:
-#     - |
-#       echo "☸️ Kubernetes Manifests Validation"
-#       kubectl apply --dry-run=client -f k8s/
-#       echo "✅ Kubernetes manifests validated"
-#   rules:
-#     - if: '$CI_COMMIT_REF_NAME == "main"'
-#   tags:
-#     - windows
-#     - docker
-#     - ems-platform
+infrastructure_kubernetes:
+  stage: infrastructure
+  image: bitnami/kubectl:latest
+  script:
+    - |
+      echo "☸️ Kubernetes Manifests Validation"
+      echo "📁 Checking if k8s directory exists..."
+      if [ -d "k8s" ]; then
+        kubectl apply --dry-run=client -f k8s/
+        echo "✅ Kubernetes manifests validated"
+      else
+        echo "⚠️ No k8s directory found, skipping..."
+      fi
+  rules:
+    - if: '$CI_COMMIT_REF_NAME == "main"'
+  tags:
+    - windows
+    - docker
+    - ems-platform
 
-# === DEPLOY STAGE (COMMENTÉ) ===
-# deploy_staging:
-#   stage: deploy
-#   image: bitnami/kubectl:latest
-#   script:
-#     - |
-#       echo "🚀 Deploying to Staging Environment"
-#       kubectl config use-context staging
-#       kubectl apply -f k8s/
-#       kubectl rollout status deployment/ems-frontend -n ems-platform
-#       kubectl rollout status deployment/ems-backend -n ems-platform
-#       echo "✅ Staging deployment completed"
-#   rules:
-#     - if: '$CI_COMMIT_REF_NAME == "dev"'
-#       when: manual
-#   tags:
-#     - windows
-#     - docker
-#     - ems-platform
+# === DEPLOY STAGE ===
+deploy_staging:
+  stage: deploy
+  image: bitnami/kubectl:latest
+  script:
+    - |
+      echo "🚀 Deploying to Staging Environment"
+      echo "⚠️ Deployment configuration not implemented yet"
+      echo "📋 To implement:"
+      echo "   1. Configure kubectl context for staging"
+      echo "   2. Apply Kubernetes manifests"
+      echo "   3. Add rollout status checks"
+      echo "📁 Current project structure:"
+      ls -la
+  rules:
+    - if: '$CI_COMMIT_REF_NAME == "dev"'
+      when: manual
+  tags:
+    - windows
+    - docker
+    - ems-platform
 
-# deploy_production:
-#   stage: deploy
-#   image: bitnami/kubectl:latest
-#   script:
-#     - |
-#       echo "🚀 Deploying to Production Environment"
-#       kubectl config use-context production
-#       kubectl apply -f k8s/
-#       kubectl rollout status deployment/ems-frontend -n ems-platform
-#       kubectl rollout status deployment/ems-backend -n ems-platform
-#       echo "✅ Production deployment completed"
-#   rules:
-#     - if: '$CI_COMMIT_REF_NAME == "main"'
-#       when: manual
-#   tags:
-#     - windows
-#     - docker
-#     - ems-platform
+deploy_production:
+  stage: deploy
+  image: bitnami/kubectl:latest
+  script:
+    - |
+      echo "🚀 Deploying to Production Environment"
+      echo "⚠️ Deployment configuration not implemented yet"
+      echo "📋 To implement:"
+      echo "   1. Configure kubectl context for production"
+      echo "   2. Apply Kubernetes manifests"
+      echo "   3. Add rollout status checks"
+      echo "📁 Current project structure:"
+      ls -la
+  rules:
+    - if: '$CI_COMMIT_REF_NAME == "main"'
+      when: manual
+  tags:
+    - windows
+    - docker
+    - ems-platform
 
 # === FINALIZE STAGE ===
 push_images:
@@ -647,8 +798,12 @@ push_images:
         docker push $DB_IMAGE:latest
 
         echo "✅ All images pushed successfully"
-      else
-        echo "⏭️ Push skipped (dev branch - pre-production)"
+      elif [ "$CI_COMMIT_REF_NAME" = "dev" ]; then
+        echo "📦 Pushing dev images..."
+        docker push $FRONTEND_IMAGE:$COMMIT_TAG
+        docker push $BACKEND_IMAGE:$COMMIT_TAG
+        docker push $DB_IMAGE:$COMMIT_TAG
+        echo "✅ Dev images pushed successfully"
       fi
   rules:
     - if: '$CI_COMMIT_REF_NAME == "dev" || $CI_COMMIT_REF_NAME == "main"'
@@ -668,8 +823,9 @@ notify_success:
       echo "- Tests: ✅ Frontend & Backend tests"
       echo "- Build: ✅ 3 Docker images built"
       echo "- Image Scan: ✅ Trivy image scans"
-      echo "- Infrastructure: ⏭️ Ready for implementation"
-      echo "- Deploy: ⏭️ Ready for implementation"
+      echo "- Infrastructure: ⚠️ Ready for implementation"
+      echo "- Deploy: ⚠️ Ready for implementation"
+      echo "- Finalize: ✅ Images pushed"
 
       if [ "$CI_COMMIT_REF_NAME" = "main" ]; then
         echo "🚀 Production images pushed to Docker Hub"
@@ -677,7 +833,23 @@ notify_success:
         echo "  - $FRONTEND_IMAGE:latest"
         echo "  - $BACKEND_IMAGE:latest"
         echo "  - $DB_IMAGE:latest"
+      elif [ "$CI_COMMIT_REF_NAME" = "dev" ]; then
+        echo "🛠️ Development images tagged with commit SHA"
+        echo "📦 Available images:"
+        echo "  - $FRONTEND_IMAGE:$COMMIT_TAG"
+        echo "  - $BACKEND_IMAGE:$COMMIT_TAG"
+        echo "  - $DB_IMAGE:$COMMIT_TAG"
       fi
+
+      echo ""
+      echo "📈 SonarQube Reports:"
+      if [ -n "$SONAR_HOST_URL" ]; then
+        echo "  - Frontend: ${SONAR_HOST_URL}/dashboard?id=ems-platform-frontend"
+        echo "  - Backend: ${SONAR_HOST_URL}/dashboard?id=ems-platform-backend"
+      else
+        echo "  ⚠️ SonarQube URL not configured"
+      fi
+
       echo "⏱️ Pipeline completed at: $(date)"
   when: on_success
   tags:
