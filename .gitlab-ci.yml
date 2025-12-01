@@ -6,8 +6,8 @@ stages:
   - setup
   - quality
   - security
-  - analysis
-  - test
+  - test # DOIT être AVANT analysis
+  - analysis # DOIT être APRÈS test pour les dépendances
   - build
   - image_scan
   - infrastructure
@@ -363,151 +363,7 @@ trivy_filesystem_scan:
     - if: '$CI_COMMIT_REF_NAME == "dev" || $CI_COMMIT_REF_NAME == "main"'
   allow_failure: true
 
-# === ANALYSIS STAGE (SONARQUBE) ===
-sonarqube_prepare:
-  stage: analysis
-  image: alpine:latest
-  script:
-    - |
-      echo "📋 Préparation de l'analyse SonarQube"
-      echo "📝 Génération du token SonarQube automatiquement"
-      echo "💡 Note: Assurez-vous d'avoir créé un projet dans SonarQube"
-      echo "🌐 URL SonarQube: ${SONAR_HOST_URL:-Non défini}"
-      echo "🔑 Pour générer un token:"
-      echo "   1. Connectez-vous à ${SONAR_HOST_URL:-localhost:9000}"
-      echo "   2. Allez dans My Account > Security"
-      echo "   3. Générer un token nommé 'gitlab-ci'"
-      echo "   4. Ajoutez-le comme variable CI/CD 'SONAR_TOKEN'"
-      echo ""
-      echo "📊 Projet analysé: ems-platform"
-      echo "📅 Commit: ${CI_COMMIT_SHA}"
-      echo "👤 Auteur: ${GITLAB_USER_NAME:-Non défini}"
-      echo "📄 Message: ${CI_COMMIT_MESSAGE}"
-  rules:
-    - if: '$CI_COMMIT_REF_NAME == "dev" || $CI_COMMIT_REF_NAME == "main"'
-      when: always
-
-sonarqube_frontend:
-  stage: analysis
-  <<: *sonarqube_template
-  dependencies:
-    - install_frontend_deps
-    - test_frontend
-  script:
-    - |
-      echo "📊 Analyse SonarQube - Frontend"
-
-      if [ -z "$SONAR_HOST_URL" ]; then
-        echo "⚠️ SONAR_HOST_URL non défini - utilisation de http://host.docker.internal:9000"
-        export SONAR_HOST_URL="http://host.docker.internal:9000"
-      fi
-
-      echo "🔗 Connexion à: ${SONAR_HOST_URL}"
-
-      if [ -z "$SONAR_TOKEN" ]; then
-        echo "❌ SONAR_TOKEN non défini"
-        echo "📋 Configurez la variable CI/CD:"
-        echo "   Nom: SONAR_TOKEN"
-        echo "   Valeur: Votre token SonarQube"
-        echo "   Protection: ✅"
-        echo "   Masquage: ✅"
-        exit 1
-      fi
-
-      # Analyse frontend
-      cd client
-      sonar-scanner \
-        -Dsonar.projectKey=ems-platform-frontend \
-        -Dsonar.projectName="EMS Platform - Frontend" \
-        -Dsonar.projectVersion=${CI_COMMIT_SHORT_SHA} \
-        -Dsonar.sources=src \
-        -Dsonar.host.url=${SONAR_HOST_URL} \
-        -Dsonar.login=${SONAR_TOKEN} \
-        -Dsonar.javascript.lcov.reportPaths=coverage/lcov.info \
-        -Dsonar.coverage.exclusions=**/*.test.js,**/*.spec.js,**/node_modules/** \
-        -Dsonar.qualitygate.wait=true \
-        -Dsonar.scm.provider=git \
-        -Dsonar.gitlab.commit_sha=${CI_COMMIT_SHA} \
-        -Dsonar.gitlab.ref_name=${CI_COMMIT_REF_NAME} \
-        -Dsonar.analysis.commitMessage="${CI_COMMIT_MESSAGE}" \
-        -Dsonar.analysis.author="${GITLAB_USER_NAME:-GitLab CI}" \
-        -Dsonar.analysis.branch="${CI_COMMIT_REF_NAME}" \
-        -Dsonar.analysis.projectKey="ems-platform-frontend"
-
-      echo "✅ Analyse SonarQube frontend terminée"
-      echo "📈 Rapport disponible sur: ${SONAR_HOST_URL}/dashboard?id=ems-platform-frontend"
-  artifacts:
-    reports:
-      codequality: gl-sonar-frontend.json
-    paths:
-      - client/.scannerwork/
-    expire_in: 1 week
-    when: always
-  rules:
-    - if: '$CI_COMMIT_REF_NAME == "dev" || $CI_COMMIT_REF_NAME == "main"'
-  allow_failure: true
-
-sonarqube_backend:
-  stage: analysis
-  <<: *sonarqube_template
-  dependencies:
-    - install_backend_deps
-    - test_backend
-  script:
-    - |
-      echo "📊 Analyse SonarQube - Backend"
-
-      if [ -z "$SONAR_HOST_URL" ]; then
-        echo "⚠️ SONAR_HOST_URL non défini - utilisation de http://host.docker.internal:9000"
-        export SONAR_HOST_URL="http://host.docker.internal:9000"
-      fi
-
-      echo "🔗 Connexion à: ${SONAR_HOST_URL}"
-
-      if [ -z "$SONAR_TOKEN" ]; then
-        echo "❌ SONAR_TOKEN non défini"
-        echo "📋 Configurez la variable CI/CD:"
-        echo "   Nom: SONAR_TOKEN"
-        echo "   Valeur: Votre token SonarQube"
-        exit 1
-      fi
-
-      # Analyse backend
-      cd backend
-      sonar-scanner \
-        -Dsonar.projectKey=ems-platform-backend \
-        -Dsonar.projectName="EMS Platform - Backend" \
-        -Dsonar.projectVersion=${CI_COMMIT_SHORT_SHA} \
-        -Dsonar.sources=. \
-        -Dsonar.exclusions=node_modules/**,**/*.test.js,**/*.spec.js,coverage/** \
-        -Dsonar.host.url=${SONAR_HOST_URL} \
-        -Dsonar.login=${SONAR_TOKEN} \
-        -Dsonar.javascript.lcov.reportPaths=coverage/lcov.info \
-        -Dsonar.tests=. \
-        -Dsonar.test.inclusions=**/*.test.js,**/*.spec.js \
-        -Dsonar.qualitygate.wait=true \
-        -Dsonar.scm.provider=git \
-        -Dsonar.gitlab.commit_sha=${CI_COMMIT_SHA} \
-        -Dsonar.gitlab.ref_name=${CI_COMMIT_REF_NAME} \
-        -Dsonar.analysis.commitMessage="${CI_COMMIT_MESSAGE}" \
-        -Dsonar.analysis.author="${GITLAB_USER_NAME:-GitLab CI}" \
-        -Dsonar.analysis.branch="${CI_COMMIT_REF_NAME}" \
-        -Dsonar.analysis.projectKey="ems-platform-backend"
-
-      echo "✅ Analyse SonarQube backend terminée"
-      echo "📈 Rapport disponible sur: ${SONAR_HOST_URL}/dashboard?id=ems-platform-backend"
-  artifacts:
-    reports:
-      codequality: gl-sonar-backend.json
-    paths:
-      - backend/.scannerwork/
-    expire_in: 1 week
-    when: always
-  rules:
-    - if: '$CI_COMMIT_REF_NAME == "dev" || $CI_COMMIT_REF_NAME == "main"'
-  allow_failure: true
-
-# === TEST STAGE ===
+# === TEST STAGE (DOIT ÊTRE AVANT ANALYSIS) ===
 test_frontend:
   stage: test
   <<: *node_template
@@ -568,6 +424,150 @@ test_backend:
     - if: '$CI_COMMIT_REF_NAME == "dev" || $CI_COMMIT_REF_NAME == "main"'
   allow_failure: true
   timeout: 10 minutes
+
+# === ANALYSIS STAGE (SONARQUBE) - APRÈS TEST ===
+sonarqube_prepare:
+  stage: analysis
+  image: alpine:latest
+  script:
+    - |
+      echo "📋 Préparation de l'analyse SonarQube"
+      echo "📝 Génération du token SonarQube automatiquement"
+      echo "💡 Note: Assurez-vous d'avoir créé un projet dans SonarQube"
+      echo "🌐 URL SonarQube: ${SONAR_HOST_URL:-Non défini}"
+      echo "🔑 Pour générer un token:"
+      echo "   1. Connectez-vous à ${SONAR_HOST_URL:-localhost:9000}"
+      echo "   2. Allez dans My Account > Security"
+      echo "   3. Générer un token nommé 'gitlab-ci'"
+      echo "   4. Ajoutez-le comme variable CI/CD 'SONAR_TOKEN'"
+      echo ""
+      echo "📊 Projet analysé: ems-platform"
+      echo "📅 Commit: ${CI_COMMIT_SHA}"
+      echo "👤 Auteur: ${GITLAB_USER_NAME:-Non défini}"
+      echo "📄 Message: ${CI_COMMIT_MESSAGE}"
+  rules:
+    - if: '$CI_COMMIT_REF_NAME == "dev" || $CI_COMMIT_REF_NAME == "main"'
+      when: always
+
+sonarqube_frontend:
+  stage: analysis
+  <<: *sonarqube_template
+  dependencies:
+    - install_frontend_deps
+    - test_frontend # MAINTENANT test_frontend est défini car il est dans le stage PRÉCÉDENT
+  script:
+    - |
+      echo "📊 Analyse SonarQube - Frontend"
+
+      if [ -z "$SONAR_HOST_URL" ]; then
+        echo "⚠️ SONAR_HOST_URL non défini - utilisation de http://host.docker.internal:9000"
+        export SONAR_HOST_URL="http://host.docker.internal:9000"
+      fi
+
+      echo "🔗 Connexion à: ${SONAR_HOST_URL}"
+
+      if [ -z "$SONAR_TOKEN" ]; then
+        echo "❌ SONAR_TOKEN non défini"
+        echo "📋 Configurez la variable CI/CD:"
+        echo "   Nom: SONAR_TOKEN"
+        echo "   Valeur: Votre token SonarQube"
+        echo "   Protection: ✅"
+        echo "   Masquage: ✅"
+        exit 1
+      fi
+
+      # Analyse frontend
+      cd client
+      sonar-scanner \
+        -Dsonar.projectKey=ems-platform-frontend \
+        -Dsonar.projectName="EMS Platform - Frontend" \
+        -Dsonar.projectVersion=${CI_COMMIT_SHORT_SHA} \
+        -Dsonar.sources=src \
+        -Dsonar.host.url=${SONAR_HOST_URL} \
+        -Dsonar.login=${SONAR_TOKEN} \
+        -Dsonar.javascript.lcov.reportPaths=coverage/lcov.info \
+        -Dsonar.coverage.exclusions=**/*.test.js,**/*.spec.js,**/node_modules/** \
+        -Dsonar.qualitygate.wait=true \
+        -Dsonar.scm.provider=git \
+        -Dsonar.gitlab.commit_sha=${CI_COMMIT_SHA} \
+        -Dsonar.gitlab.ref_name=${CI_COMMIT_REF_NAME} \
+        -Dsonar.analysis.commitMessage="${CI_COMMIT_MESSAGE}" \
+        -Dsonar.analysis.author="${GITLAB_USER_NAME:-GitLab CI}" \
+        -Dsonar.analysis.branch="${CI_COMMIT_REF_NAME}" \
+        -Dsonar.analysis.projectKey="ems-platform-frontend"
+
+      echo "✅ Analyse SonarQube frontend terminée"
+      echo "📈 Rapport disponible sur: ${SONAR_HOST_URL}/dashboard?id=ems-platform-frontend"
+  artifacts:
+    reports:
+      codequality: gl-sonar-frontend.json
+    paths:
+      - client/.scannerwork/
+    expire_in: 1 week
+    when: always
+  rules:
+    - if: '$CI_COMMIT_REF_NAME == "dev" || $CI_COMMIT_REF_NAME == "main"'
+  allow_failure: true
+
+sonarqube_backend:
+  stage: analysis
+  <<: *sonarqube_template
+  dependencies:
+    - install_backend_deps
+    - test_backend # MAINTENANT test_backend est défini car il est dans le stage PRÉCÉDENT
+  script:
+    - |
+      echo "📊 Analyse SonarQube - Backend"
+
+      if [ -z "$SONAR_HOST_URL" ]; then
+        echo "⚠️ SONAR_HOST_URL non défini - utilisation de http://host.docker.internal:9000"
+        export SONAR_HOST_URL="http://host.docker.internal:9000"
+      fi
+
+      echo "🔗 Connexion à: ${SONAR_HOST_URL}"
+
+      if [ -z "$SONAR_TOKEN" ]; then
+        echo "❌ SONAR_TOKEN non défini"
+        echo "📋 Configurez la variable CI/CD:"
+        echo "   Nom: SONAR_TOKEN"
+        echo "   Valeur: Votre token SonarQube"
+        exit 1
+      fi
+
+      # Analyse backend
+      cd backend
+      sonar-scanner \
+        -Dsonar.projectKey=ems-platform-backend \
+        -Dsonar.projectName="EMS Platform - Backend" \
+        -Dsonar.projectVersion=${CI_COMMIT_SHORT_SHA} \
+        -Dsonar.sources=. \
+        -Dsonar.exclusions=node_modules/**,**/*.test.js,**/*.spec.js,coverage/** \
+        -Dsonar.host.url=${SONAR_HOST_URL} \
+        -Dsonar.login=${SONAR_TOKEN} \
+        -Dsonar.javascript.lcov.reportPaths=coverage/lcov.info \
+        -Dsonar.tests=. \
+        -Dsonar.test.inclusions=**/*.test.js,**/*.spec.js \
+        -Dsonar.qualitygate.wait=true \
+        -Dsonar.scm.provider=git \
+        -Dsonar.gitlab.commit_sha=${CI_COMMIT_SHA} \
+        -Dsonar.gitlab.ref_name=${CI_COMMIT_REF_NAME} \
+        -Dsonar.analysis.commitMessage="${CI_COMMIT_MESSAGE}" \
+        -Dsonar.analysis.author="${GITLAB_USER_NAME:-GitLab CI}" \
+        -Dsonar.analysis.branch="${CI_COMMIT_REF_NAME}" \
+        -Dsonar.analysis.projectKey="ems-platform-backend"
+
+      echo "✅ Analyse SonarQube backend terminée"
+      echo "📈 Rapport disponible sur: ${SONAR_HOST_URL}/dashboard?id=ems-platform-backend"
+  artifacts:
+    reports:
+      codequality: gl-sonar-backend.json
+    paths:
+      - backend/.scannerwork/
+    expire_in: 1 week
+    when: always
+  rules:
+    - if: '$CI_COMMIT_REF_NAME == "dev" || $CI_COMMIT_REF_NAME == "main"'
+  allow_failure: true
 
 # === BUILD STAGE ===
 build_frontend_image:
@@ -819,8 +819,8 @@ notify_success:
       echo "- Setup: ✅ Dependencies installed"
       echo "- Quality: ✅ ESLint & Prettier checks"
       echo "- Security: ✅ Audit & Trivy FS scan"
-      echo "- Analysis: ✅ SonarQube analysis"
       echo "- Tests: ✅ Frontend & Backend tests"
+      echo "- Analysis: ✅ SonarQube analysis"
       echo "- Build: ✅ 3 Docker images built"
       echo "- Image Scan: ✅ Trivy image scans"
       echo "- Infrastructure: ⚠️ Ready for implementation"
