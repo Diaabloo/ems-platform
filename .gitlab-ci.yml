@@ -157,7 +157,7 @@ install_frontend_deps:
     expire_in: 1 hour
   rules:
     - if: '$CI_COMMIT_REF_NAME == "dev" || $CI_COMMIT_REF_NAME == "main"'
-  timeout: 15 minutes
+  timeout: 20 minutes
 
 install_backend_deps:
   stage: setup
@@ -199,7 +199,7 @@ install_backend_deps:
     expire_in: 1 hour
   rules:
     - if: '$CI_COMMIT_REF_NAME == "dev" || $CI_COMMIT_REF_NAME == "main"'
-  timeout: 15 minutes
+  timeout: 20 minutes
 
 # === QUALITY STAGE ===
 eslint_frontend:
