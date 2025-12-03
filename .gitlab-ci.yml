@@ -132,7 +132,7 @@ variables:
     - sonar-scanner --version
     - echo "🔍 Variables disponibles:"
     - echo "SONAR_HOST_URL:http://host.docker.internal:9000"
-    - echo "   SONAR_TOKEN:in local runner config.toml"
+    - echo "SONAR_TOKEN:in runner local config.toml"
   tags:
     - windows
     - docker
