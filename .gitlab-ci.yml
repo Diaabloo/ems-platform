@@ -468,17 +468,42 @@ sonarqube_frontend:
       echo "✅ Configuration valide"
       echo "🔗 SonarQube: $SONAR_HOST_URL"
 
+      # Vérifier la structure du projet
+      echo "📂 Vérification de la structure du projet..."
+      echo "📂 Chemin courant: $(pwd)"
+      echo "📂 Contenu du dossier client:"
+      ls -la client/
+
+      # Pour Next.js avec App Router, les sources sont dans app/
+      SOURCE_DIR="app"
+
+      # Vérifier que le dossier app existe
+      if [ ! -d "client/${SOURCE_DIR}" ]; then
+        echo "❌ ERREUR: Le dossier client/${SOURCE_DIR} n'existe pas!"
+        echo "📁 Dossiers disponibles dans client/:"
+        find client/ -maxdepth 1 -type d | sort
+        exit 1
+      fi
+
+      echo "📁 Structure de client/${SOURCE_DIR}:"
+      find "client/${SOURCE_DIR}" -type f -name "*.tsx" -o -name "*.ts" -o -name "*.js" -o -name "*.jsx" | head -10
+
       # Analyse
+      echo "🔍 Lancement de l'analyse SonarQube..."
       cd client
+
+      # Pour Next.js, nous devons analyser plusieurs dossiers
       sonar-scanner \
         -Dsonar.projectKey=ems-platform-frontend \
-        -Dsonar.projectName="EMS Platform - Frontend" \
+        -Dsonar.projectName="EMS Platform - Frontend (Next.js)" \
         -Dsonar.projectVersion=${CI_COMMIT_SHORT_SHA} \
-        -Dsonar.sources=src \
+        -Dsonar.sources=app,components,hooks,lib,styles \
+        -Dsonar.exclusions=**/node_modules/**,**/*.test.*,**/*.spec.*,**/.next/** \
         -Dsonar.host.url=${SONAR_HOST_URL} \
         -Dsonar.login=${SONAR_TOKEN} \
         -Dsonar.javascript.lcov.reportPaths=coverage/lcov.info \
-        -Dsonar.coverage.exclusions=**/*.test.js,**/*.spec.js,**/node_modules/** \
+        -Dsonar.typescript.lcov.reportPaths=coverage/lcov.info \
+        -Dsonar.sourceEncoding=UTF-8 \
         -Dsonar.qualitygate.wait=false \
         -Dsonar.scm.provider=git
 
@@ -575,10 +600,47 @@ build_db_image:
   script:
     - |
       echo "🏗️ Building Database image..."
-      docker build -t $DB_IMAGE:$COMMIT_TAG -t $DB_IMAGE:latest ./db
-      echo "🔍 Built images:"
+      echo "📂 Vérification du contexte de build..."
+
+      # Vérifier le répertoire courant
+      echo "📂 Répertoire courant: $(pwd)"
+      echo "📂 Contenu du répertoire:"
+      ls -la
+
+      # Vérifier le dossier db
+      echo "📂 Vérification du dossier db..."
+      if [ ! -d "db" ]; then
+        echo "❌ ERREUR: Le dossier 'db' n'existe pas!"
+        exit 1
+      fi
+
+      cd db
+      echo "📂 Contenu du dossier db:"
+      ls -la
+
+      # Vérifier que le fichier SQL existe
+      if [ ! -f "employeedb_dump.sql" ]; then
+        echo "❌ ERREUR: Le fichier employeedb_dump.sql n'existe pas dans db/"
+        exit 1
+      fi
+
+      echo "✅ Fichiers trouvés:"
+      echo "  - Dockerfile: $(ls -la Dockerfile)"
+      echo "  - employeedb_dump.sql: $(ls -la employeedb_dump.sql | awk '{print $5}') bytes"
+
+      # Retour au répertoire parent pour le build
+      cd ..
+
+      echo "🔨 Construction de l'image Docker..."
+      docker build \
+        -t $DB_IMAGE:$COMMIT_TAG \
+        -t $DB_IMAGE:latest \
+        ./db
+
+      echo "🔍 Images construites:"
       docker images | grep "$DB_IMAGE"
-      echo "✅ Database image built"
+
+      echo "✅ Database image built successfully"
   rules:
     - if: '$CI_COMMIT_REF_NAME == "dev" || $CI_COMMIT_REF_NAME == "main"'
   timeout: 10 minutes
