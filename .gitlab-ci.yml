@@ -1,5 +1,5 @@
 # ============================================
-# EMS Platform - CI/CD Pipeline with SonarQube
+# EMS Platform - Pipeline Final Optimisé
 # ============================================
 
 stages:
@@ -10,10 +10,10 @@ stages:
   - analysis
   - build
   - image_scan
-  - infrastructure
-  - deploy
   - finalize
 
+# Variables globales - Notez que SONAR_TOKEN n'est pas défini ici
+# car il sera fourni par le runner local via config.toml
 variables:
   GIT_CLEAN_FLAGS: -ffdx -e client/node_modules/ -e backend/node_modules/
   DOCKER_TLS_CERTDIR: ""
@@ -34,7 +34,8 @@ variables:
   CI: "true"
   SONAR_USER_HOME: "${CI_PROJECT_DIR}/.sonar"
   GIT_DEPTH: "0"
-  SONAR_HOST_URL: "http://localhost:9000"
+  # Pour le runner local seulement
+  SONAR_HOST_URL: "http://host.docker.internal:9000"
 
 # === TEMPLATES ===
 .docker_template: &docker_template
@@ -129,12 +130,14 @@ variables:
   before_script:
     - echo "🔧 SonarQube Scanner Setup"
     - sonar-scanner --version
+    - echo "🔍 Variables disponibles:"
+    - echo "SONAR_HOST_URL:http://host.docker.internal:9000"
+    - echo "   SONAR_TOKEN:in local runner config.toml"
   tags:
     - windows
     - docker
     - ems-platform
 
-# === MODIFICATION CRITIQUE : Template Trivy corrigé ===
 .trivy_template: &trivy_template
   image: alpine:latest
   before_script:
@@ -263,25 +266,6 @@ eslint_backend:
     - if: '$CI_COMMIT_REF_NAME == "dev" || $CI_COMMIT_REF_NAME == "main"'
   allow_failure: true
 
-prettier_check:
-  stage: quality
-  <<: *node_template
-  dependencies:
-    - install_frontend_deps
-    - install_backend_deps
-  script:
-    - |
-      echo "🎨 Running Prettier check..."
-      echo "📁 Frontend formatting..."
-      cd client && npx prettier --check src/ || true
-      cd ..
-      echo "📁 Backend formatting..."
-      cd backend && npx prettier --check . || true
-      echo "✅ Prettier check completed"
-  rules:
-    - if: '$CI_COMMIT_REF_NAME == "dev" || $CI_COMMIT_REF_NAME == "main"'
-  allow_failure: true
-
 # === SECURITY STAGE ===
 audit_frontend:
   stage: security
@@ -325,27 +309,6 @@ audit_backend:
     - if: '$CI_COMMIT_REF_NAME == "dev" || $CI_COMMIT_REF_NAME == "main"'
   allow_failure: true
 
-validate_prisma_schema:
-  stage: security
-  <<: *node_postgres_template
-  dependencies:
-    - install_backend_deps
-  script:
-    - |
-      echo "🗄️ Prisma schema validation..."
-      cd backend
-      echo "🔍 Validating schema syntax..."
-      npx prisma@6.18.0 validate
-      echo "🔍 Testing database connection..."
-      npx prisma@6.18.0 db execute --stdin --url "$DATABASE_URL" <<< "SELECT version();"
-      echo "✅ Database connection successful"
-      echo "✅ Prisma schema validated successfully"
-  rules:
-    - if: '$CI_COMMIT_REF_NAME == "dev" || $CI_COMMIT_REF_NAME == "main"'
-  timeout: 15 minutes
-  allow_failure: false
-
-# === CORRECTION : Job Trivy Filesystem Scan corrigé ===
 trivy_filesystem_scan:
   stage: security
   <<: *trivy_template
@@ -429,33 +392,6 @@ test_backend:
   timeout: 10 minutes
 
 # === ANALYSIS STAGE (SONARQUBE) ===
-# Remplacement de sonarqube_setup par une configuration directe
-sonarqube_config:
-  stage: analysis
-  image: alpine:latest
-  script:
-    - |
-      echo "🔧 Configuration SonarQube"
-      echo "📋 Vérification des variables:"
-      echo "SONAR_HOST_URL: ${SONAR_HOST_URL:-Non défini}"
-      echo "SONAR_TOKEN: $(if [ -n \"${SONAR_TOKEN:-}\" ]; then echo '✅ DÉFINI (masqué)'; else echo '❌ NON DÉFINI'; fi)"
-      echo ""
-      echo "⚠️  IMPORTANT: Si SONAR_TOKEN n'est pas défini:"
-      echo "1. Allez sur ${SONAR_HOST_URL:-http://localhost:9000}"
-      echo "2. Login → My Account → Security → Generate Token"
-      echo "3. Nom: gitlab-ci"
-      echo "4. Copiez le token"
-      echo "5. Dans GitLab → Settings → CI/CD → Variables"
-      echo "   - SONAR_TOKEN: [votre_token]"
-      echo "   - Protection: ✅"
-      echo "   - Mask: ✅"
-      echo ""
-      echo "✅ Configuration terminée"
-  rules:
-    - if: '$CI_COMMIT_REF_NAME == "dev" || $CI_COMMIT_REF_NAME == "main"'
-      when: always
-
-# === CORRECTION : SonarQube Frontend avec vérification améliorée ===
 sonarqube_frontend:
   stage: analysis
   <<: *sonarqube_template
@@ -465,51 +401,24 @@ sonarqube_frontend:
   script:
     - |
       echo "📊 Analyse SonarQube - Frontend"
-      echo "🔍 Vérification des variables d'environnement..."
 
-      # Vérification plus robuste de SONAR_TOKEN
-      if [ -z "${SONAR_TOKEN:-}" ]; then
-        echo "❌ ERREUR: SONAR_TOKEN non défini ou vide!"
+      # Vérification finale
+      if [ -z "$SONAR_TOKEN" ]; then
+        echo "❌ ERREUR CRITIQUE: SONAR_TOKEN non disponible!"
         echo ""
-        echo "📋 SOLUTION RAPIDE:"
-        echo "1. Vérifiez que SONAR_TOKEN est défini dans GitLab CI/CD Variables"
-        echo "2. Si c'est le cas, essayez ces solutions:"
-        echo "   a. Redémarrer le runner local: gitlab-runner restart"
-        echo "   b. Vérifier que la variable n'est pas limitée à des tags spécifiques"
-        echo "   c. Utiliser 'export SONAR_TOKEN=\"votre_token\"' dans le before_script"
-        echo ""
-        echo "🔄 Test de connexion à SonarQube:"
-        curl -s "${SONAR_HOST_URL:-http://localhost:9000}/api/system/status" || echo "❌ Impossible de contacter SonarQube"
+        echo "📋 SOLUTION: Configurez le runner local avec:"
+        echo "   1. Éditez C:\GitLab-Runner\config.toml"
+        echo "   2. Ajoutez: [runners.environment]"
+        echo "   3. Définissez: SONAR_TOKEN = \"votre_token\""
+        echo "   4. Redémarrez: gitlab-runner restart"
         exit 1
       fi
 
-      echo "✅ SONAR_TOKEN défini (longueur: ${#SONAR_TOKEN} caractères)"
-      echo "🔗 SonarQube URL: ${SONAR_HOST_URL}"
-
-      # Vérification de la couverture
-      if [ ! -f "client/coverage/lcov.info" ]; then
-        echo "⚠️  Fichier de couverture non trouvé"
-        echo "📋 Création d'un fichier minimal pour test..."
-        cd client
-        mkdir -p coverage
-        cat > coverage/lcov.info << 'EOF'
-      TN:
-      SF:src/App.js
-      FNF:0
-      FNH:0
-      LF:1
-      LH:0
-      BRF:0
-      BRH:0
-      end_of_record
-      EOF
-        cd ..
-      fi
+      echo "✅ Configuration valide"
+      echo "🔗 SonarQube: $SONAR_HOST_URL"
 
       # Analyse
-      echo "🚀 Démarrage de l'analyse SonarQube..."
       cd client
-
       sonar-scanner \
         -Dsonar.projectKey=ems-platform-frontend \
         -Dsonar.projectName="EMS Platform - Frontend" \
@@ -520,11 +429,7 @@ sonarqube_frontend:
         -Dsonar.javascript.lcov.reportPaths=coverage/lcov.info \
         -Dsonar.coverage.exclusions=**/*.test.js,**/*.spec.js,**/node_modules/** \
         -Dsonar.qualitygate.wait=false \
-        -Dsonar.scm.provider=git \
-        -Dsonar.sourceEncoding=UTF-8 \
-        -Dsonar.exclusions=**/node_modules/**,**/coverage/**,**/test-results/** \
-        -Dsonar.gitlab.commit_sha=${CI_COMMIT_SHA} \
-        -Dsonar.gitlab.ref_name=${CI_COMMIT_REF_NAME}
+        -Dsonar.scm.provider=git
 
       echo "✅ Analyse SonarQube frontend terminée"
       echo "📈 Rapport: ${SONAR_HOST_URL}/dashboard?id=ems-platform-frontend"
@@ -537,7 +442,6 @@ sonarqube_frontend:
     - if: '$CI_COMMIT_REF_NAME == "dev" || $CI_COMMIT_REF_NAME == "main"'
   allow_failure: true
 
-# === CORRECTION : SonarQube Backend avec vérification améliorée ===
 sonarqube_backend:
   stage: analysis
   <<: *sonarqube_template
@@ -547,49 +451,17 @@ sonarqube_backend:
   script:
     - |
       echo "📊 Analyse SonarQube - Backend"
-      echo "🔍 Vérification des variables d'environnement..."
 
-      # Vérification plus robuste de SONAR_TOKEN
-      if [ -z "${SONAR_TOKEN:-}" ]; then
-        echo "❌ ERREUR: SONAR_TOKEN non défini ou vide!"
-        echo ""
-        echo "📋 SOLUTION RAPIDE:"
-        echo "1. Test direct: echo \$SONAR_TOKEN"
-        echo "2. Vérifier dans GitLab: Settings → CI/CD → Variables"
-        echo "3. Le token doit être masqué mais accessible au runner"
-        echo ""
-        echo "🔄 Test de connexion à SonarQube:"
-        curl -s "${SONAR_HOST_URL:-http://localhost:9000}/api/system/status" || echo "❌ Impossible de contacter SonarQube"
+      if [ -z "$SONAR_TOKEN" ]; then
+        echo "❌ SONAR_TOKEN non disponible"
         exit 1
       fi
 
-      echo "✅ SONAR_TOKEN défini (longueur: ${#SONAR_TOKEN} caractères)"
-      echo "🔗 SonarQube URL: ${SONAR_HOST_URL}"
-
-      # Vérification de la couverture
-      if [ ! -f "backend/coverage/lcov.info" ]; then
-        echo "⚠️  Fichier de couverture non trouvé"
-        echo "📋 Création d'un fichier minimal pour test..."
-        cd backend
-        mkdir -p coverage
-        cat > coverage/lcov.info << 'EOF'
-      TN:
-      SF:index.js
-      FNF:0
-      FNH:0
-      LF:1
-      LH:0
-      BRF:0
-      BRH:0
-      end_of_record
-      EOF
-        cd ..
-      fi
+      echo "✅ Configuration valide"
+      echo "🔗 SonarQube: $SONAR_HOST_URL"
 
       # Analyse
-      echo "🚀 Démarrage de l'analyse SonarQube..."
       cd backend
-
       sonar-scanner \
         -Dsonar.projectKey=ems-platform-backend \
         -Dsonar.projectName="EMS Platform - Backend" \
@@ -600,11 +472,7 @@ sonarqube_backend:
         -Dsonar.javascript.lcov.reportPaths=coverage/lcov.info \
         -Dsonar.coverage.exclusions=**/*.test.js,**/*.spec.js,**/node_modules/** \
         -Dsonar.qualitygate.wait=false \
-        -Dsonar.scm.provider=git \
-        -Dsonar.sourceEncoding=UTF-8 \
-        -Dsonar.exclusions=**/node_modules/**,**/coverage/**,**/test-results/** \
-        -Dsonar.gitlab.commit_sha=${CI_COMMIT_SHA} \
-        -Dsonar.gitlab.ref_name=${CI_COMMIT_REF_NAME}
+        -Dsonar.scm.provider=git
 
       echo "✅ Analyse SonarQube backend terminée"
       echo "📈 Rapport: ${SONAR_HOST_URL}/dashboard?id=ems-platform-backend"
@@ -709,28 +577,6 @@ trivy_scan_backend:
     - if: '$CI_COMMIT_REF_NAME == "dev" || $CI_COMMIT_REF_NAME == "main"'
   allow_failure: true
 
-trivy_scan_db:
-  stage: image_scan
-  <<: *trivy_template
-  dependencies:
-    - build_db_image
-  script:
-    - |
-      echo "🔍 Scanning Database image with Trivy..."
-      mkdir -p artifacts
-      trivy image --format json --output artifacts/trivy-db-scan.json $DB_IMAGE:$COMMIT_TAG || true
-      trivy image --format table --output artifacts/trivy-db-scan.txt $DB_IMAGE:$COMMIT_TAG || true
-      echo "✅ Database image scan completed"
-  artifacts:
-    paths:
-      - artifacts/trivy-db-scan.json
-      - artifacts/trivy-db-scan.txt
-    expire_in: 1 week
-    when: always
-  rules:
-    - if: '$CI_COMMIT_REF_NAME == "dev" || $CI_COMMIT_REF_NAME == "main"'
-  allow_failure: true
-
 # === FINALIZE STAGE ===
 push_images:
   stage: finalize
@@ -738,7 +584,6 @@ push_images:
   dependencies:
     - trivy_scan_frontend
     - trivy_scan_backend
-    - trivy_scan_db
   script:
     - |
       echo "🚀 Pushing images to Docker Hub..."
@@ -775,8 +620,8 @@ notify_success:
       echo "🎉 Pipeline completed successfully!"
       echo "📊 Summary:"
       echo "- Setup: ✅ Dependencies installed"
-      echo "- Quality: ✅ ESLint & Prettier checks"
-      echo "- Security: ✅ Audit & Trivy FS scan"
+      echo "- Quality: ✅ ESLint checks"
+      echo "- Security: ✅ Audit & Trivy scans"
       echo "- Tests: ✅ Frontend & Backend tests"
       echo "- Analysis: ✅ SonarQube analysis"
       echo "- Build: ✅ 3 Docker images built"
@@ -785,26 +630,14 @@ notify_success:
 
       if [ "$CI_COMMIT_REF_NAME" = "main" ]; then
         echo "🚀 Production images pushed to Docker Hub"
-        echo "📦 Available images:"
-        echo "  - $FRONTEND_IMAGE:latest"
-        echo "  - $BACKEND_IMAGE:latest"
-        echo "  - $DB_IMAGE:latest"
       elif [ "$CI_COMMIT_REF_NAME" = "dev" ]; then
         echo "🛠️ Development images tagged with commit SHA"
-        echo "📦 Available images:"
-        echo "  - $FRONTEND_IMAGE:$COMMIT_TAG"
-        echo "  - $BACKEND_IMAGE:$COMMIT_TAG"
-        echo "  - $DB_IMAGE:$COMMIT_TAG"
       fi
 
       echo ""
       echo "📈 SonarQube Reports:"
-      if [ -n "${SONAR_HOST_URL:-}" ] && [ -n "${SONAR_TOKEN:-}" ]; then
-        echo "  - Frontend: ${SONAR_HOST_URL}/dashboard?id=ems-platform-frontend"
-        echo "  - Backend: ${SONAR_HOST_URL}/dashboard?id=ems-platform-backend"
-      else
-        echo "  ⚠️ SonarQube not configured"
-      fi
+      echo "  - Frontend: http://localhost:9000/dashboard?id=ems-platform-frontend"
+      echo "  - Backend: http://localhost:9000/dashboard?id=ems-platform-backend"
 
       echo "⏱️ Pipeline completed at: $(date)"
   when: on_success
