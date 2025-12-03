@@ -1,9 +1,9 @@
 # Dumps et données locales
-employeedb_dump.sql
+/db/employeedb_dump.sql
 .hintrc
 .env
 postgres-data
-/db/*.sql
+
 
 # Logs globaux
 *.log
