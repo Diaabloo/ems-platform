@@ -106,15 +106,12 @@ export default function EmployeeDetailPage() {
       try {
         setLoading(true);
         setError(null);
-        const res = await fetch(
-          `http://localhost:5000/api/employees/${employeeId}`,
-          {
-            headers: {
-              "Content-Type": "application/json",
-              Authorization: `Bearer ${localStorage.getItem("token") || ""}`,
-            },
+        const res = await fetch(`/api/employees/${employeeId}`, {
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${localStorage.getItem("token") || ""}`,
           },
-        );
+        });
         if (!res.ok) throw new Error(`HTTP ${res.status}`);
         const json = await res.json();
         const formattedEmployee: Employee = {

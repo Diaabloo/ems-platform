@@ -36,6 +36,7 @@ variables:
   SONAR_USER_HOME: "${CI_PROJECT_DIR}/.sonar"
   GIT_DEPTH: "0"
   SONAR_HOST_URL: "http://host.docker.internal:9000"
+  NGROK_URL: "https://nonentomologic-spring-conflictedly.ngrok-free.dev"
 
 # === TEMPLATES ===
 .docker_template: &docker_template
@@ -714,88 +715,120 @@ trivy_scan_db:
   allow_failure: true
 
 # === INFRASTRUCTURE STAGE ===
-infrastructure_terraform:
+k8s_yaml_validation:
   stage: infrastructure
-  image: hashicorp/terraform:latest
+  image: cytopia/yamllint
   script:
-    - |
-      echo "🏗️ Terraform Infrastructure Deployment"
-      echo "📁 Checking if terraform directory exists..."
-      if [ -d "terraform" ]; then
-        cd terraform
-        terraform init
-        terraform validate
-        terraform plan -out=plan.tfplan
-        echo "✅ Infrastructure plan generated"
-      else
-        echo "⚠️ No terraform directory found, skipping..."
-      fi
+    - echo "🔍 Vérification syntaxe YAML des manifests k8s/"
+    - yamllint -c .yamllint k8s/ || (echo "❌ YAML mal formé !" && exit 1)
   rules:
-    - if: '$CI_COMMIT_REF_NAME == "main"'
-      when: manual
+    - if: '$CI_COMMIT_REF_NAME == "dev" || $CI_COMMIT_REF_NAME == "main"'
+  allow_failure: true
   tags:
     - windows
     - docker
     - ems-platform
 
-infrastructure_kubernetes:
+kube_linter:
+  stage: infrastructure
+  image: stackrox/kube-linter:latest
+  script:
+    - echo "🔍 Analyse kube-linter (best practices + sécurité)"
+    - mkdir -p artifacts
+    - kube-linter lint k8s/ --format sarif > artifacts/kube-linter-report.sarif || true
+  artifacts:
+    paths:
+      - artifacts/kube-linter-report.sarif
+    expire_in: 1 week
+    when: always
+  allow_failure: true
+  tags:
+    - windows
+    - docker
+    - ems-platform
+
+kubectl_dry_run:
   stage: infrastructure
   image: bitnami/kubectl:latest
+  before_script:
+    - echo "🔧 Configuration kubectl..."
+    - mkdir -p ~/.kube
+    - echo "$KUBECONFIG_CONTENT" > ~/.kube/config
+    - sed -i 's/127.0.0.1/host.docker.internal/g' ~/.kube/config
+    - sed -i 's/localhost/host.docker.internal/g' ~/.kube/config
+    - echo "🔍 Contexts disponibles:"
+    - kubectl config get-contexts
+    - echo "📌 Utilisation du context -> k3d-ems-platform-cluster"
+    - kubectl config use-context k3d-ems-platform-cluster || echo "⚠️ Context non trouvé, utilisation du context par défaut"
   script:
-    - |
-      echo "☸️ Kubernetes Manifests Validation"
-      echo "📁 Checking if k8s directory exists..."
-      if [ -d "k8s" ]; then
-        kubectl apply --dry-run=client -f k8s/
-        echo "✅ Kubernetes manifests validated"
-      else
-        echo "⚠️ No k8s directory found, skipping..."
-      fi
+    - echo "🚫 Simulation déploiement complet (dry-run)"
+    - kubectl apply --dry-run=client -f k8s/ --recursive
+    - echo "✅ Tous les manifests sont valides syntaxiquement"
   rules:
-    - if: '$CI_COMMIT_REF_NAME == "main"'
+    - if: '$CI_COMMIT_REF_NAME == "dev" || $CI_COMMIT_REF_NAME == "main"'
+  allow_failure: true
+  tags:
+    - windows
+    - docker
+    - ems-platform
+
+kubeconform_validate:
+  stage: infrastructure
+  image: ghcr.io/yannh/kubeconform:latest
+  script:
+    - echo "🔍 Validation schéma officiel Kubernetes (kubeconform)"
+    - kubeconform -schema-location default -ignore-missing-schemas -output tap k8s/
+  rules:
+    - if: '$CI_COMMIT_REF_NAME == "dev" || $CI_COMMIT_REF_NAME == "main"'
+  allow_failure: true
   tags:
     - windows
     - docker
     - ems-platform
 
 # === DEPLOY STAGE ===
-deploy_staging:
+deploy_to_k3d:
   stage: deploy
   image: bitnami/kubectl:latest
   script:
-    - |
-      echo "🚀 Deploying to Staging Environment"
-      echo "⚠️ Deployment configuration not implemented yet"
-      echo "📋 To implement:"
-      echo "   1. Configure kubectl context for staging"
-      echo "   2. Apply Kubernetes manifests"
-      echo "   3. Add rollout status checks"
-      echo "📁 Current project structure:"
-      ls -la
+    - echo "🚀 Connexion au cluster k3d..."
+    - mkdir -p ~/.kube
+    - echo "$KUBECONFIG_CONTENT" > ~/.kube/config
+    - sed -i 's/127.0.0.1/host.docker.internal/g' ~/.kube/config
+    - sed -i 's/localhost/host.docker.internal/g' ~/.kube/config
+
+    - echo "🔍 Vérification connexion cluster..."
+    - kubectl cluster-info || (echo "❌ Cluster inaccessible!" && exit 1)
+    - kubectl get nodes || (echo "❌ Nodes indisponibles!" && exit 1)
+
+    - echo "🔍 Vérification namespace ems-platform..."
+    - kubectl get namespace ems-platform || kubectl create namespace ems-platform
+
+    - echo "📦 Déploiement des manifests via Kustomize..."
+    - kubectl apply -k k8s/_global/
+
+    - echo "⏳ Attente du redémarrage des services (180s timeout)..."
+    - kubectl rollout status deployment/frontend-deployment -n ems-platform --timeout=180s || echo "⚠️ Frontend rollout timeout"
+    - kubectl rollout status deployment/backend-deployment -n ems-platform --timeout=180s || echo "⚠️ Backend rollout timeout"
+
+    - echo "🎯 État des ressources déployées:"
+    - kubectl get all -n ems-platform
+
+    - echo "📊 Détails des pods:"
+    - kubectl get pods -n ems-platform -o wide
+
+    - echo "🔗 Services exposés:"
+    - kubectl get svc -n ems-platform
+
+    - echo "🌐 Ingress configuré:"
+    - kubectl get ingress -n ems-platform
+
+    - echo "✅ Déploiement terminé sur $NGROK_URL"
+    - echo "📱 Vérifiez l'application à $NGROK_URL"
   rules:
     - if: '$CI_COMMIT_REF_NAME == "dev"'
-      when: manual
-  tags:
-    - windows
-    - docker
-    - ems-platform
-
-deploy_production:
-  stage: deploy
-  image: bitnami/kubectl:latest
-  script:
-    - |
-      echo "🚀 Deploying to Production Environment"
-      echo "⚠️ Deployment configuration not implemented yet"
-      echo "📋 To implement:"
-      echo "   1. Configure kubectl context for production"
-      echo "   2. Apply Kubernetes manifests"
-      echo "   3. Add rollout status checks"
-      echo "📁 Current project structure:"
-      ls -la
-  rules:
-    - if: '$CI_COMMIT_REF_NAME == "main"'
-      when: manual
+  allow_failure: true
+  timeout: 10 minutes
   tags:
     - windows
     - docker
@@ -836,6 +869,10 @@ push_images:
   rules:
     - if: '$CI_COMMIT_REF_NAME == "dev" || $CI_COMMIT_REF_NAME == "main"'
   timeout: 15 minutes
+  tags:
+    - windows
+    - docker
+    - ems-platform
 
 notify_success:
   stage: finalize

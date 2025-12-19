@@ -60,16 +60,13 @@ export default function EmployeesPage() {
           ...(searchQuery && { search: searchQuery }),
         });
 
-        const res = await fetch(
-          `http://localhost:5000/api/employees?${params.toString()}`,
-          {
-            headers: {
-              "Content-Type": "application/json",
-              Authorization: `Bearer ${localStorage.getItem("token") || ""}`,
-            },
-            signal: controller.signal,
+        const res = await fetch(`/api/employees?${params.toString()}`, {
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${localStorage.getItem("token") || ""}`,
           },
-        );
+          signal: controller.signal,
+        });
 
         if (!res.ok) throw new Error(`HTTP ${res.status}`);
         const json = await res.json();

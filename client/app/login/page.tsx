@@ -9,6 +9,11 @@ import { Mail, Lock, Shield } from "lucide-react";
 export default function LoginPage() {
   const router = useRouter();
   const login = useStore((state) => state.login);
+  // const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:5000";
+  // const API_URL = '/api';
+
+  //// SSR : URL interne {(process.env.BACKEND_API_URL || 'http://localhost:5000/api')} | CSR : Relatif, pour proxy via rewrites ou API routes {'/api'}
+  const API_URL = process.env.NEXT_PUBLIC_API_URL || "/api";
 
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -27,11 +32,17 @@ export default function LoginPage() {
       return;
     }
     try {
-      const response = await fetch("http://localhost:5000/api/admin/login", {
+      console.log("API_URL utilisé :", API_URL);
+      const response = await fetch(`${API_URL}/admin/login`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ email, password }),
       });
+      // const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/admin/login`, {
+      //   method: "POST",
+      //   headers: { "Content-Type": "application/json" },
+      //   body: JSON.stringify({ email, password }),
+      // });
       console.log("Login response status:", response.status);
       const data = await response.json();
       console.log("Login response data:", data);
@@ -50,13 +61,14 @@ export default function LoginPage() {
   const handleVerify = async (e: React.FormEvent) => {
     e.preventDefault();
     setError("");
+    console.log("Calling verify API at:", `${API_URL}/admin/verify`);
     console.log("Sending verify request:", { userId, code: verificationCode });
     if (!verificationCode || verificationCode.length !== 6) {
       setError("Veuillez entrer un code de vérification à 6 chiffres");
       return;
     }
     try {
-      const response = await fetch("http://localhost:5000/api/admin/verify", {
+      const response = await fetch(`${API_URL}/admin/verify`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ userId, code: verificationCode }),

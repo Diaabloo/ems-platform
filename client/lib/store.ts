@@ -3,6 +3,10 @@
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
 
+const getApiBase = () => {
+  return process.env.NEXT_PUBLIC_API_URL || "/api";
+};
+
 // Types
 export type Absence = {
   id: string;
@@ -402,7 +406,7 @@ export const useStore = create<AppState>()(
       fetchDepartments: async () => {
         const token = localStorage.getItem("token");
         try {
-          const res = await fetch("http://localhost:5000/api/departments", {
+          const res = await fetch(`${getApiBase()}/departments`, {
             headers: { Authorization: `Bearer ${token || ""}` },
           });
           if (!res.ok) throw new Error("Failed");
@@ -422,7 +426,9 @@ export const useStore = create<AppState>()(
 
       addDepartment: async (dept) => {
         const token = localStorage.getItem("token");
-        const res = await fetch("http://localhost:5000/api/departments", {
+
+        // fetch("http://localhost:5000/api/departments", {
+        const res = await fetch(`${getApiBase()}/departments`, {
           method: "POST",
           headers: {
             "Content-Type": "application/json",
@@ -443,7 +449,9 @@ export const useStore = create<AppState>()(
 
       updateDepartment: async (id, updates) => {
         const token = localStorage.getItem("token");
-        const res = await fetch(`http://localhost:5000/api/departments/${id}`, {
+
+        // `http://localhost:5000/api/departments/${id}`
+        const res = await fetch(`${getApiBase()}/departments/${id}`, {
           method: "PUT",
           headers: {
             "Content-Type": "application/json",
@@ -462,7 +470,9 @@ export const useStore = create<AppState>()(
 
       deleteDepartment: async (id) => {
         const token = localStorage.getItem("token");
-        const res = await fetch(`http://localhost:5000/api/departments/${id}`, {
+
+        // `http://localhost:5000/api/departments/${id}`
+        const res = await fetch(`${getApiBase()}/departments/${id}`, {
           method: "DELETE",
           headers: { Authorization: `Bearer ${token || ""}` },
         });

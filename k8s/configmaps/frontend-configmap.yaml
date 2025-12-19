@@ -1,0 +1,9 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: frontend-config
+  namespace: ems-platform
+data:
+  NEXT_TELEMETRY_DISABLED: "1"
+  NEXT_PUBLIC_API_URL: "/api"
+  BACKEND_API_URL: "http://backend.ems-platform.svc.cluster.local:5000/api"
