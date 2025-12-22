@@ -719,8 +719,9 @@ k8s_yaml_validation:
   stage: infrastructure
   image: cytopia/yamllint
   script:
-    - echo "🔍 Vérification syntaxe YAML des manifests k8s/"
-    - yamllint -c .yamllint k8s/ || (echo "❌ YAML mal formé !" && exit 1)
+    - |
+      echo "🔍 Vérification syntaxe YAML des manifests k8s/"
+      yamllint -c .yamllint k8s/ || (echo "❌ YAML mal formé !" && exit 1)
   rules:
     - if: '$CI_COMMIT_REF_NAME == "dev" || $CI_COMMIT_REF_NAME == "main"'
   allow_failure: true
@@ -731,17 +732,22 @@ k8s_yaml_validation:
 
 kube_linter:
   stage: infrastructure
-  image: stackrox/kube-linter:latest
+  image:
+    name: stackrox/kube-linter:latest
+    entrypoint: [""]
   script:
-    - echo "🔍 Analyse kube-linter (best practices + sécurité)"
-    - mkdir -p artifacts
-    - kube-linter lint k8s/ --format sarif > artifacts/kube-linter-report.sarif || true
+    - |
+      echo "🔍 Analyse kube-linter (best practices + sécurité)"
+      mkdir -p artifacts
+      /kube-linter lint k8s/ --format sarif > artifacts/kube-linter-report.sarif || true
   artifacts:
     paths:
       - artifacts/kube-linter-report.sarif
     expire_in: 1 week
     when: always
   allow_failure: true
+  rules:
+    - if: '$CI_COMMIT_REF_NAME == "dev" || $CI_COMMIT_REF_NAME == "main"'
   tags:
     - windows
     - docker
@@ -749,21 +755,25 @@ kube_linter:
 
 kubectl_dry_run:
   stage: infrastructure
-  image: bitnami/kubectl:latest
+  image:
+    name: bitnami/kubectl:latest
+    entrypoint: [""]
   before_script:
-    - echo "🔧 Configuration kubectl..."
-    - mkdir -p ~/.kube
-    - echo "$KUBECONFIG_CONTENT" > ~/.kube/config
-    - sed -i 's/127.0.0.1/host.docker.internal/g' ~/.kube/config
-    - sed -i 's/localhost/host.docker.internal/g' ~/.kube/config
-    - echo "🔍 Contexts disponibles:"
-    - kubectl config get-contexts
-    - echo "📌 Utilisation du context -> k3d-ems-platform-cluster"
-    - kubectl config use-context k3d-ems-platform-cluster || echo "⚠️ Context non trouvé, utilisation du context par défaut"
+    - |
+      echo "🔧 Configuration kubectl..."
+      mkdir -p ~/.kube
+      echo "$KUBECONFIG_CONTENT" > ~/.kube/config
+      sed -i 's/127.0.0.1/host.docker.internal/g' ~/.kube/config
+      sed -i 's/localhost/host.docker.internal/g' ~/.kube/config
+      echo "🔍 Contexts disponibles:"
+      kubectl config get-contexts || true
+      echo "📌 Utilisation du context -> k3d-ems-platform-cluster"
+      kubectl config use-context k3d-ems-platform-cluster || echo "⚠️ Context non trouvé"
   script:
-    - echo "🚫 Simulation déploiement complet (dry-run)"
-    - kubectl apply --dry-run=client -f k8s/ --recursive
-    - echo "✅ Tous les manifests sont valides syntaxiquement"
+    - |
+      echo "🚫 Simulation déploiement complet (dry-run)"
+      kubectl apply --dry-run=client -f k8s/ --recursive
+      echo "✅ Tous les manifests sont valides syntaxiquement"
   rules:
     - if: '$CI_COMMIT_REF_NAME == "dev" || $CI_COMMIT_REF_NAME == "main"'
   allow_failure: true
@@ -774,10 +784,13 @@ kubectl_dry_run:
 
 kubeconform_validate:
   stage: infrastructure
-  image: ghcr.io/yannh/kubeconform:latest
+  image:
+    name: ghcr.io/yannh/kubeconform:latest
+    entrypoint: [""]
   script:
-    - echo "🔍 Validation schéma officiel Kubernetes (kubeconform)"
-    - kubeconform -schema-location default -ignore-missing-schemas -output tap k8s/
+    - |
+      echo "🔍 Validation schéma officiel Kubernetes (kubeconform)"
+      /kubeconform -schema-location default -ignore-missing-schemas -output tap k8s/
   rules:
     - if: '$CI_COMMIT_REF_NAME == "dev" || $CI_COMMIT_REF_NAME == "main"'
   allow_failure: true
@@ -789,42 +802,45 @@ kubeconform_validate:
 # === DEPLOY STAGE ===
 deploy_to_k3d:
   stage: deploy
-  image: bitnami/kubectl:latest
+  image:
+    name: bitnami/kubectl:latest
+    entrypoint: [""]
   script:
-    - echo "🚀 Connexion au cluster k3d..."
-    - mkdir -p ~/.kube
-    - echo "$KUBECONFIG_CONTENT" > ~/.kube/config
-    - sed -i 's/127.0.0.1/host.docker.internal/g' ~/.kube/config
-    - sed -i 's/localhost/host.docker.internal/g' ~/.kube/config
+    - |
+      echo "🚀 Connexion au cluster k3d..."
+      mkdir -p ~/.kube
+      echo "$KUBECONFIG_CONTENT" > ~/.kube/config
+      sed -i 's/127.0.0.1/host.docker.internal/g' ~/.kube/config
+      sed -i 's/localhost/host.docker.internal/g' ~/.kube/config
 
-    - echo "🔍 Vérification connexion cluster..."
-    - kubectl cluster-info || (echo "❌ Cluster inaccessible!" && exit 1)
-    - kubectl get nodes || (echo "❌ Nodes indisponibles!" && exit 1)
+      echo "🔍 Vérification connexion cluster..."
+      kubectl cluster-info || (echo "❌ Cluster inaccessible!" && exit 1)
+      kubectl get nodes || (echo "❌ Nodes indisponibles!" && exit 1)
 
-    - echo "🔍 Vérification namespace ems-platform..."
-    - kubectl get namespace ems-platform || kubectl create namespace ems-platform
+      echo "🔍 Vérification namespace ems-platform..."
+      kubectl get namespace ems-platform || kubectl create namespace ems-platform
 
-    - echo "📦 Déploiement des manifests via Kustomize..."
-    - kubectl apply -k k8s/_global/
+      echo "📦 Déploiement des manifests via Kustomize..."
+      kubectl apply -k k8s/_global/
 
-    - echo "⏳ Attente du redémarrage des services (180s timeout)..."
-    - kubectl rollout status deployment/frontend-deployment -n ems-platform --timeout=180s || echo "⚠️ Frontend rollout timeout"
-    - kubectl rollout status deployment/backend-deployment -n ems-platform --timeout=180s || echo "⚠️ Backend rollout timeout"
+      echo "⏳ Attente du redémarrage des services (180s timeout)..."
+      kubectl rollout status deployment/frontend-deployment -n ems-platform --timeout=180s || echo "⚠️ Frontend rollout timeout"
+      kubectl rollout status deployment/backend-deployment -n ems-platform --timeout=180s || echo "⚠️ Backend rollout timeout"
 
-    - echo "🎯 État des ressources déployées:"
-    - kubectl get all -n ems-platform
+      echo "🎯 État des ressources déployées:"
+      kubectl get all -n ems-platform
 
-    - echo "📊 Détails des pods:"
-    - kubectl get pods -n ems-platform -o wide
+      echo "📊 Détails des pods:"
+      kubectl get pods -n ems-platform -o wide
 
-    - echo "🔗 Services exposés:"
-    - kubectl get svc -n ems-platform
+      echo "🔗 Services exposés:"
+      kubectl get svc -n ems-platform
 
-    - echo "🌐 Ingress configuré:"
-    - kubectl get ingress -n ems-platform
+      echo "🌐 Ingress configuré:"
+      kubectl get ingress -n ems-platform
 
-    - echo "✅ Déploiement terminé sur $NGROK_URL"
-    - echo "📱 Vérifiez l'application à $NGROK_URL"
+      echo "✅ Déploiement terminé sur $NGROK_URL"
+      echo "📱 Vérifiez l'application à $NGROK_URL"
   rules:
     - if: '$CI_COMMIT_REF_NAME == "dev"'
   allow_failure: true
