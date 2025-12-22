@@ -818,52 +818,53 @@ kubeconform_validate:
     - ems-platform
 
 # === DEPLOY STAGE - VERSION FINALE CORRIGÉE ===
-deploy_to_k3d:
+deploy:
   stage: deploy
   image:
     name: bitnami/kubectl:latest
     entrypoint: [""]
   script:
-    - echo "🚀 Connexion au cluster k3d..."
+    - echo "🚀 Configuration de l'accès au cluster k3d..."
     - mkdir -p ~/.kube
+
     - echo "$KUBECONFIG_CONTENT" > ~/.kube/config
-    - sed -i 's/127.0.0.1/host.docker.internal/g' ~/.kube/config
-    - sed -i 's/localhost/host.docker.internal/g' ~/.kube/config
 
-    - echo "🔍 Debug - Contenu du kubeconfig:"
-    - cat ~/.kube/config | grep -E "(clusters|contexts|users|current-context)" || true
+    - echo "🔍 Vérification de la configuration kubectl..."
+    - kubectl config view --minify
 
-    - echo "🔍 Vérification connexion cluster..."
-    - kubectl cluster-info || (echo "❌ Cluster inaccessible!" && exit 1)
-    - kubectl get nodes || (echo "❌ Nodes indisponibles!" && exit 1)
+    - echo "🔍 Test de connexion au cluster..."
+    - kubectl cluster-info || (echo "❌ Impossible de se connecter au cluster!" && exit 1)
 
-    - echo "🔍 Vérification namespace ems-platform..."
+    - echo "✅ Connexion au cluster réussie!"
+    - kubectl get nodes
+
+    - echo "🔍 Vérification/Création du namespace ems-platform..."
     - kubectl get namespace ems-platform || kubectl create namespace ems-platform
 
-    - echo "📦 Déploiement des manifests via Kustomize..."
-    - kubectl apply -k k8s/_global/
+    - echo "📦 Déploiement des ressources Kubernetes..."
+    - kubectl apply -k k8s/_global/ || (echo "❌ Échec du déploiement!" && exit 1)
 
-    - echo "⏳ Attente du redémarrage des services (180s timeout)..."
-    - kubectl rollout status deployment/frontend-deployment -n ems-platform --timeout=180s || echo "⚠️ Frontend rollout timeout"
-    - kubectl rollout status deployment/backend-deployment -n ems-platform --timeout=180s || echo "⚠️ Backend rollout timeout"
+    - echo "⏳ Attente du démarrage des pods (timeout 3min)..."
+    - kubectl wait --for=condition=ready pod -l app=frontend -n ems-platform --timeout=180s || echo "⚠️ Frontend pas encore prêt"
+    - kubectl wait --for=condition=ready pod -l app=backend -n ems-platform --timeout=180s || echo "⚠️ Backend pas encore prêt"
 
-    - echo "🎯 État des ressources déployées:"
-    - kubectl get all -n ems-platform
+    - echo "🎯 État des déploiements:"
+    - kubectl get deployments -n ems-platform
 
-    - echo "📊 Détails des pods:"
+    - echo "📊 État des pods:"
     - kubectl get pods -n ems-platform -o wide
 
     - echo "🔗 Services exposés:"
     - kubectl get svc -n ems-platform
 
-    - echo "🌐 Ingress configuré:"
-    - kubectl get ingress -n ems-platform
+    - echo "🌐 Ingress configurés:"
+    - kubectl get ingress -n ems-platform || echo "Aucun ingress trouvé"
 
-    - echo "✅ Déploiement terminé sur $NGROK_URL"
-    - echo "📱 Vérifiez l'application à $NGROK_URL"
+    - echo "✅ Déploiement terminé!"
+    - echo "🌍 Application accessible via $NGROK_URL"
   rules:
     - if: '$CI_COMMIT_REF_NAME == "dev"'
-  allow_failure: true
+  allow_failure: false
   timeout: 10 minutes
   tags:
     - windows
