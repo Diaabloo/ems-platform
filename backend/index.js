@@ -37,9 +37,9 @@ app.use(
     origin: function (origin, callback) {
       // Autoriser les requêtes sans origin (ex: curl, postman)
       if (!origin) {
-        console.warn(
-          "Requête sans en-tête Origin détectée. Autorisation par défaut pour le développement.",
-        );
+        // console.warn(
+        //   "Requête sans en-tête Origin détectée. Autorisation par défaut pour le développement.",
+        // );
         return callback(null, true);
       }
 
