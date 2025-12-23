@@ -817,59 +817,59 @@ kubeconform_validate:
     - docker
     - ems-platform
 
-# === DEPLOY STAGE - VERSION FINALE CORRIGÉE ===
-deploy:
-  stage: deploy
-  image:
-    name: bitnami/kubectl:latest
-    entrypoint: [""]
-  script:
-    - echo "🚀 Configuration de l'accès au cluster k3d..."
-    - mkdir -p ~/.kube
+# # === DEPLOY STAGE - VERSION FINALE CORRIGÉE ===
+# deploy:
+#   stage: deploy
+#   image:
+#     name: bitnami/kubectl:latest
+#     entrypoint: [""]
+#   script:
+#     - echo "🚀 Configuration de l'accès au cluster k3d..."
+#     - mkdir -p ~/.kube
 
-    - echo "$KUBECONFIG_CONTENT" > ~/.kube/config
+#     - echo "$KUBECONFIG_CONTENT" > ~/.kube/config
 
-    - echo "🔍 Vérification de la configuration kubectl..."
-    - kubectl config view --minify
+#     - echo "🔍 Vérification de la configuration kubectl..."
+#     - kubectl config view --minify
 
-    - echo "🔍 Test de connexion au cluster..."
-    - kubectl cluster-info || (echo "❌ Impossible de se connecter au cluster!" && exit 1)
+#     - echo "🔍 Test de connexion au cluster..."
+#     - kubectl cluster-info || (echo "❌ Impossible de se connecter au cluster!" && exit 1)
 
-    - echo "✅ Connexion au cluster réussie!"
-    - kubectl get nodes
+#     - echo "✅ Connexion au cluster réussie!"
+#     - kubectl get nodes
 
-    - echo "🔍 Vérification/Création du namespace ems-platform..."
-    - kubectl get namespace ems-platform || kubectl create namespace ems-platform
+#     - echo "🔍 Vérification/Création du namespace ems-platform..."
+#     - kubectl get namespace ems-platform || kubectl create namespace ems-platform
 
-    - echo "📦 Déploiement des ressources Kubernetes..."
-    - kubectl apply -k k8s/_global/ || (echo "❌ Échec du déploiement!" && exit 1)
+#     - echo "📦 Déploiement des ressources Kubernetes..."
+#     - kubectl apply -k k8s/_global/ || (echo "❌ Échec du déploiement!" && exit 1)
 
-    - echo "⏳ Attente du démarrage des pods (timeout 3min)..."
-    - kubectl wait --for=condition=ready pod -l app=frontend -n ems-platform --timeout=180s || echo "⚠️ Frontend pas encore prêt"
-    - kubectl wait --for=condition=ready pod -l app=backend -n ems-platform --timeout=180s || echo "⚠️ Backend pas encore prêt"
+#     - echo "⏳ Attente du démarrage des pods (timeout 3min)..."
+#     - kubectl wait --for=condition=ready pod -l app=frontend -n ems-platform --timeout=180s || echo "⚠️ Frontend pas encore prêt"
+#     - kubectl wait --for=condition=ready pod -l app=backend -n ems-platform --timeout=180s || echo "⚠️ Backend pas encore prêt"
 
-    - echo "🎯 État des déploiements:"
-    - kubectl get deployments -n ems-platform
+#     - echo "🎯 État des déploiements:"
+#     - kubectl get deployments -n ems-platform
 
-    - echo "📊 État des pods:"
-    - kubectl get pods -n ems-platform -o wide
+#     - echo "📊 État des pods:"
+#     - kubectl get pods -n ems-platform -o wide
 
-    - echo "🔗 Services exposés:"
-    - kubectl get svc -n ems-platform
+#     - echo "🔗 Services exposés:"
+#     - kubectl get svc -n ems-platform
 
-    - echo "🌐 Ingress configurés:"
-    - kubectl get ingress -n ems-platform || echo "Aucun ingress trouvé"
+#     - echo "🌐 Ingress configurés:"
+#     - kubectl get ingress -n ems-platform || echo "Aucun ingress trouvé"
 
-    - echo "✅ Déploiement terminé!"
-    - echo "🌍 Application accessible via $NGROK_URL"
-  rules:
-    - if: '$CI_COMMIT_REF_NAME == "dev"'
-  allow_failure: false
-  timeout: 10 minutes
-  tags:
-    - windows
-    - docker
-    - ems-platform
+#     - echo "✅ Déploiement terminé!"
+#     - echo "🌍 Application accessible via $NGROK_URL"
+#   rules:
+#     - if: '$CI_COMMIT_REF_NAME == "dev"'
+#   allow_failure: false
+#   timeout: 10 minutes
+#   tags:
+#     - windows
+#     - docker
+#     - ems-platform
 
 # === FINALIZE STAGE ===
 push_images:
