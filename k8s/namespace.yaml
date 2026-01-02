@@ -1,7 +1,0 @@
-apiVersion: v1
-kind: Namespace
-metadata:
-  name: ems-platform
-  labels:
-    name: ems-platform
-    app.kubernetes.io/part-of: ems-platform
