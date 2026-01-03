@@ -11,8 +11,7 @@ stages:
   - build # Docker image building
   - image_scan # Container security scanning
   - infrastructure # Kubernetes manifest validation
-  - deploy # Deployment to K8s cluster
-  - finalize # Image push & cleanup
+  - gitops # Deployment to K8s cluster
 
 # ========================================
 # Global Variables
@@ -72,7 +71,7 @@ variables:
     - echo "📦 Authenticating with Docker Hub..."
     - echo "$DOCKERHUB_TOKEN" | docker login -u "$DOCKERHUB_USERNAME" --password-stdin
   tags:
-    - windows
+    - linux
     - docker
     - ems-platform
 
@@ -84,7 +83,7 @@ variables:
     - node --version
     - npm --version
   tags:
-    - windows
+    - linux
     - docker
     - ems-platform
 
@@ -134,7 +133,7 @@ variables:
       fi
       echo "✅ PostgreSQL is ready!"
   tags:
-    - windows
+    - linux
     - docker
     - ems-platform
 
@@ -145,7 +144,7 @@ variables:
     - echo "🔧 Alpine Linux Setup"
     - apk add --no-cache openssh-client curl postgresql-client bc
   tags:
-    - windows
+    - linux
     - docker
     - ems-platform
 
@@ -164,7 +163,7 @@ variables:
     - echo "🔧 SonarQube Scanner Setup"
     - sonar-scanner --version
   tags:
-    - windows
+    - linux
     - docker
     - ems-platform
 
@@ -178,7 +177,7 @@ variables:
     - echo "✅ Trivy installed successfully"
     - trivy --version
   tags:
-    - windows
+    - linux
     - docker
     - ems-platform
 
@@ -1138,125 +1137,53 @@ kubeconform_validate:
     - ems-platform
 
 # ========================================
-# STAGE 9: DEPLOY
-# Deployment to Kubernetes cluster
-# ========================================
-
-deploy:
-  stage: deploy
-  image:
-    name: bitnami/kubectl:latest
-    entrypoint: [""]
-  before_script:
-    - echo "🚀 Configuring k3d Cluster Access..."
-    - mkdir -p ~/.kube
-
-    # Write kubeconfig
-    - echo "$KUBECONFIG_CONTENT" > ~/.kube/config
-
-    # Fix localhost for Docker Desktop networking
-    - sed -i 's/127.0.0.1/host.docker.internal/g' ~/.kube/config
-    - sed -i 's/localhost/host.docker.internal/g' ~/.kube/config
-  script:
-    - |
-      echo "🔍 Verifying kubectl configuration..."
-      kubectl config view --minify
-
-      echo "🔍 Testing cluster connection..."
-      kubectl cluster-info || (echo "❌ Cannot connect to cluster!" && exit 1)
-
-      echo "✅ Cluster connection successful!"
-      kubectl get nodes
-
-      echo "🔍 Checking/Creating namespace ems-platform..."
-      kubectl get namespace ems-platform || kubectl create namespace ems-platform
-
-      echo "📦 Deploying Kubernetes resources..."
-      kubectl apply -k k8s/_global/ || (echo "❌ Deployment failed!" && exit 1)
-
-      echo "⏳ Waiting for pods to start (timeout: 3min)..."
-      kubectl wait \
-        --for=condition=ready \
-        pod -l app=frontend \
-        -n ems-platform \
-        --timeout=180s || echo "⚠️ Frontend not ready yet"
-
-      kubectl wait \
-        --for=condition=ready \
-        pod -l app=backend \
-        -n ems-platform \
-        --timeout=180s || echo "⚠️ Backend not ready yet"
-
-      echo "🎯 Deployment Status:"
-      kubectl get deployments -n ems-platform
-
-      echo "📊 Pod Status:"
-      kubectl get pods -n ems-platform -o wide
-
-      echo "🔗 Exposed Services:"
-      kubectl get svc -n ems-platform
-
-      echo "🌐 Ingress Configuration:"
-      kubectl get ingress -n ems-platform || echo "No ingress found"
-
-      echo "✅ Deployment completed successfully!"
-      echo "🌍 Application accessible via: $NGROK_URL"
-  rules:
-    - if: '$CI_COMMIT_REF_NAME == "dev"'
-      when: manual
-    - if: '$CI_COMMIT_REF_NAME == "main"'
-      when: manual
-  allow_failure: false
-  timeout: 10 minutes
-  tags:
-    - windows
-    - docker
-    - ems-platform
-
-# ========================================
-# STAGE 10: FINALIZE
-# Image push and cleanup
+# STAGE 9: GITOPS
+# Push images & update manifests
 # ========================================
 
 push_images:
-  stage: finalize
-  <<: *docker_template
+  stage: gitops
+  image: docker:24
+  variables:
+    DOCKER_TLS_CERTDIR: ""
+    DOCKER_BUILDKIT: "1"
+  before_script:
+    - echo "🔧 Docker Environment Setup"
+    - docker --version
+    - docker info
+    - echo "📦 Authenticating with Docker Hub..."
+    - echo "$DOCKERHUB_TOKEN" | docker login -u "$DOCKERHUB_USERNAME" --password-stdin
+  
   dependencies:
     - trivy_scan_frontend
     - trivy_scan_backend
     - trivy_scan_db
+  
   script:
     - |
       echo "🚀 Pushing Images to Docker Hub..."
 
       if [ "$CI_COMMIT_REF_NAME" = "main" ]; then
         echo "📦 Pushing Production Images..."
-
-        # Push Frontend
-        echo "⬆️ Pushing Frontend..."
+        
         docker push $FRONTEND_IMAGE:$COMMIT_TAG
         docker push $FRONTEND_IMAGE:latest
-
-        # Push Backend
-        echo "⬆️ Pushing Backend..."
+        
         docker push $BACKEND_IMAGE:$COMMIT_TAG
         docker push $BACKEND_IMAGE:latest
-
-        # Push Database
-        echo "⬆️ Pushing Database..."
+        
         docker push $DB_IMAGE:$COMMIT_TAG
         docker push $DB_IMAGE:latest
-
+        
         echo "✅ All production images pushed successfully"
 
       elif [ "$CI_COMMIT_REF_NAME" = "dev" ]; then
         echo "📦 Pushing Development Images..."
-
-        # Push with commit SHA only
+        
         docker push $FRONTEND_IMAGE:$COMMIT_TAG
         docker push $BACKEND_IMAGE:$COMMIT_TAG
         docker push $DB_IMAGE:$COMMIT_TAG
-
+        
         echo "✅ Development images pushed successfully"
       fi
 
@@ -1269,17 +1196,146 @@ push_images:
         echo "  (Also tagged as :latest)"
       fi
       echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+  
   rules:
     - if: '$CI_COMMIT_REF_NAME == "dev" || $CI_COMMIT_REF_NAME == "main"'
+  
   timeout: 15 minutes
+  
   tags:
     - windows
     - docker
     - ems-platform
 
-notify_success:
-  stage: finalize
+update_manifests:
+  stage: gitops
   image: alpine:latest
+  
+  needs:
+    - push_images
+  
+  before_script:
+    - echo "🔧 Setting up GitOps environment..."
+    - apk add --no-cache git openssh-client bash wget
+    - wget https://github.com/mikefarah/yq/releases/download/v4.40.5/yq_linux_amd64 -O /usr/bin/yq
+    - chmod +x /usr/bin/yq
+    - yq --version
+    - mkdir -p ~/.ssh
+    - chmod 700 ~/.ssh
+    - echo "$GITOPS_DEPLOY_KEY" | tr -d '\r' > ~/.ssh/id_rsa
+    - chmod 600 ~/.ssh/id_rsa
+    - ssh-keyscan -t rsa gitlab.com >> ~/.ssh/known_hosts
+    - chmod 644 ~/.ssh/known_hosts
+    - git config --global user.email "ci@ems-platform.com"
+    - git config --global user.name "GitLab CI Bot"
+    - git config --global core.sshCommand "ssh -i ~/.ssh/id_rsa -o StrictHostKeyChecking=no"
+  
+  script:
+    - |
+      echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+      echo "🔄 GITOPS: Updating Kubernetes Manifests"
+      echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+      
+      if [ "$CI_COMMIT_REF_NAME" = "main" ]; then
+        OVERLAY="prod"
+        IMAGE_TAG="latest"
+        echo "🚀 Environment: PRODUCTION"
+      else
+        OVERLAY="dev"
+        IMAGE_TAG="$COMMIT_TAG"
+        echo "🛠️  Environment: DEVELOPMENT"
+      fi
+      
+      echo "📦 Image Tag: $IMAGE_TAG"
+      echo "🌿 Git Branch: $CI_COMMIT_REF_NAME"
+      echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+      
+      echo ""
+      echo "📥 Cloning GitOps repository..."
+      git clone git@gitlab.com:amineelalami05/ems-gitops.git
+      cd ems-gitops
+      
+      KUSTOMIZE_FILE="k8s/overlays/$OVERLAY/kustomization.yaml"
+      if [ ! -f "$KUSTOMIZE_FILE" ]; then
+        echo "❌ ERROR: File not found: $KUSTOMIZE_FILE"
+        exit 1
+      fi
+      
+      echo ""
+      echo "🔍 Current image tags:"
+      yq eval '.images[] | .name + " → " + .newTag' "$KUSTOMIZE_FILE"
+      
+      echo ""
+      echo "✏️  Updating image tags to: $IMAGE_TAG"
+      yq eval ".images[0].newTag = \"$IMAGE_TAG\"" -i "$KUSTOMIZE_FILE"
+      yq eval ".images[1].newTag = \"$IMAGE_TAG\"" -i "$KUSTOMIZE_FILE"
+      yq eval ".images[2].newTag = \"$IMAGE_TAG\"" -i "$KUSTOMIZE_FILE"
+      
+      echo ""
+      echo "✅ New image tags:"
+      yq eval '.images[] | .name + " → " + .newTag' "$KUSTOMIZE_FILE"
+      
+      if git diff --quiet "$KUSTOMIZE_FILE"; then
+        echo ""
+        echo "ℹ️  No changes detected - images already up to date"
+        exit 0
+      fi
+      
+      echo ""
+      echo "📝 Changes to be committed:"
+      git diff "$KUSTOMIZE_FILE"
+      
+      echo ""
+      echo "📤 Committing changes..."
+      git add "$KUSTOMIZE_FILE"
+      
+      git commit -m "🚀 Deploy $OVERLAY: Update images to $IMAGE_TAG
+
+Pipeline: $CI_PIPELINE_URL
+Commit: $CI_COMMIT_SHORT_SHA
+Branch: $CI_COMMIT_REF_NAME
+Job: $CI_JOB_ID
+Triggered by: $GITLAB_USER_LOGIN
+
+Images updated:
+- backend-image  → amineelalami/ems-platform-backend:$IMAGE_TAG
+- frontend-image → amineelalami/ems-platform-frontend:$IMAGE_TAG
+- database-image → amineelalami/ems-platform-db:$IMAGE_TAG"
+      
+      echo ""
+      echo "⬆️  Pushing to remote repository..."
+      git push origin main
+      
+      echo ""
+      echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+      echo "✅ GitOps manifests updated successfully!"
+      echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+      echo "🔍 ArgoCD will detect changes and sync automatically (~3 min)"
+      echo "📊 Monitor deployment:"
+      echo "   kubectl get applications -n argocd"
+      echo "   kubectl get pods -n ems-platform -w"
+      echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+  
+  rules:
+    - if: '$CI_COMMIT_REF_NAME == "dev"'
+      when: on_success
+    - if: '$CI_COMMIT_REF_NAME == "main"'
+      when: manual
+  
+  allow_failure: false
+  
+  tags:
+    - linux
+    - docker
+    - ems-platform
+
+notify_success:
+  stage: gitops
+  image: alpine:latest
+  
+  needs:
+    - update_manifests
+  
   script:
     - |
       echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
@@ -1288,88 +1344,77 @@ notify_success:
       echo ""
       echo "📊 PIPELINE SUMMARY:"
       echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-      echo "✅ Stage 1 - Setup:          Dependencies installed & cached"
-      echo "✅ Stage 2 - Quality:        ESLint & Prettier checks passed"
-      echo "✅ Stage 3 - Security:       Audits, Prisma & Trivy scans completed"
-      echo "✅ Stage 4 - Test:           Frontend & Backend tests passed"
-      echo "✅ Stage 5 - Analysis:       SonarQube analysis completed"
+      echo "✅ Stage 1 - Setup:          Dependencies installed"
+      echo "✅ Stage 2 - Quality:        Code quality verified"
+      echo "✅ Stage 3 - Security:       Security scans completed"
+      echo "✅ Stage 4 - Test:           All tests passed"
+      echo "✅ Stage 5 - Analysis:       SonarQube analysis done"
       echo "✅ Stage 6 - Build:          3 Docker images built"
-      echo "✅ Stage 7 - Image Scan:     Trivy container scans completed"
+      echo "✅ Stage 7 - Image Scan:     Container scans completed"
       echo "✅ Stage 8 - Infrastructure: K8s manifests validated"
-      echo "⚠️  Stage 9 - Deploy:        Ready for manual deployment"
-      echo "✅ Stage 10 - Finalize:      Images pushed to Docker Hub"
+      echo "✅ Stage 9 - GitOps:         Images pushed & manifests updated"
       echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
       echo ""
 
       if [ "$CI_COMMIT_REF_NAME" = "main" ]; then
-        echo "🚀 PRODUCTION BUILD"
+        echo "🚀 PRODUCTION DEPLOYMENT"
         echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-        echo "📦 Available Images:"
+        echo "📦 Images:"
         echo "  • $FRONTEND_IMAGE:latest"
         echo "  • $BACKEND_IMAGE:latest"
         echo "  • $DB_IMAGE:latest"
-        echo "  • All tagged with SHA: $COMMIT_TAG"
-
       elif [ "$CI_COMMIT_REF_NAME" = "dev" ]; then
-        echo "🛠️  DEVELOPMENT BUILD"
+        echo "🛠️  DEVELOPMENT DEPLOYMENT"
         echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-        echo "📦 Available Images:"
+        echo "📦 Images:"
         echo "  • $FRONTEND_IMAGE:$COMMIT_TAG"
         echo "  • $BACKEND_IMAGE:$COMMIT_TAG"
         echo "  • $DB_IMAGE:$COMMIT_TAG"
       fi
 
       echo ""
-      echo "📈 QUALITY REPORTS:"
+      echo "🔄 ArgoCD will deploy automatically"
+      echo "⏱️  Completed: $(date '+%Y-%m-%d %H:%M:%S')"
       echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-      if [ -n "${SONAR_HOST_URL:-}" ] && [ -n "${SONAR_TOKEN:-}" ]; then
-        echo "🔍 SonarQube Analysis:"
-        echo "  • Frontend: ${SONAR_HOST_URL}/dashboard?id=ems-platform-frontend"
-        echo "  • Backend:  ${SONAR_HOST_URL}/dashboard?id=ems-platform-backend"
-      else
-        echo "⚠️  SonarQube not configured for this runner"
-        echo "   (Configure SONAR_TOKEN in runner environment)"
-      fi
-
-      echo ""
-      echo "🔒 SECURITY ARTIFACTS:"
-      echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-      echo "  • NPM Audit Reports (Frontend & Backend)"
-      echo "  • Trivy Filesystem Scan"
-      echo "  • Trivy Container Image Scans (3 images)"
-      echo "  • kube-linter Kubernetes Security Report"
-
-      echo ""
-      echo "⏱️  Completed at: $(date '+%Y-%m-%d %H:%M:%S %Z')"
-      echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+  
   when: on_success
+  
+  tags:
+    - linux
+    - docker
+    - ems-platform
+
+cleanup:
+  stage: gitops
+  image: docker:24
+  variables:
+    DOCKER_TLS_CERTDIR: ""
+  
+  before_script:
+    - docker --version
+  
+  script:
+    - |
+      echo "🧹 Performing Pipeline Cleanup..."
+      echo "🔍 Current Docker Disk Usage:"
+      docker system df
+      
+      echo "🔄 Pruning unused resources..."
+      docker system prune -f
+      
+      echo "✅ Cleanup completed"
+      echo "🔍 Updated Docker Disk Usage:"
+      docker system df
+  
+  when: always
+  allow_failure: true
+  timeout: 5 minutes
+  
   tags:
     - windows
     - docker
     - ems-platform
 
-cleanup:
-  stage: finalize
-  <<: *docker_template
-  script:
-    - |
-      echo "🧹 Performing Pipeline Cleanup..."
-
-      # Display current Docker usage
-      echo "🔍 Current Docker Disk Usage:"
-      docker system df
-
-      # Prune unused Docker resources
-      echo "🔄 Pruning unused containers, networks, and images..."
-      docker system prune -f
-
-      # Display cleanup results
-      echo "✅ Cleanup completed"
-      echo "🔍 Updated Docker Disk Usage:"
-      docker system df
-  when: always
-  allow_failure: true
-  timeout: 5 minutes
 
 # ========================================
 # Workflow Rules
