@@ -1,17 +1,18 @@
+---
 # ========================================
 # EMS Platform - CI/CD Pipeline
 # ========================================
 
 stages:
-  - setup # Dependency installation & caching
-  - quality # Code quality checks (ESLint, Prettier)
-  - security # Security audits & vulnerability scanning
-  - test # Unit & integration tests with coverage
-  - analysis # SonarQube code analysis
-  - build # Docker image building
-  - image_scan # Container security scanning
-  - infrastructure # Kubernetes manifest validation
-  - gitops # Deployment to K8s cluster
+  - setup  # Dependency installation & caching
+  - quality  # Code quality checks (ESLint, Prettier)
+  - security  # Security audits & vulnerability scanning
+  - test  # Unit & integration tests with coverage
+  - analysis  # SonarQube code analysis
+  - build  # Docker image building
+  - image_scan  # Container security scanning
+  - infrastructure  # Kubernetes manifest validation
+  - gitops  # Deployment to K8s cluster
 
 # ========================================
 # Global Variables
@@ -69,7 +70,9 @@ variables:
     - docker --version
     - docker info
     - echo "📦 Authenticating with Docker Hub..."
-    - echo "$DOCKERHUB_TOKEN" | docker login -u "$DOCKERHUB_USERNAME" --password-stdin
+    - >-
+      echo "$DOCKERHUB_TOKEN" | docker login -u "$DOCKERHUB_USERNAME"
+      --password-stdin
   tags:
     - linux
     - docker
@@ -110,19 +113,23 @@ variables:
     POSTGRES_USER: "postgres"
     POSTGRES_PASSWORD: "password"
     POSTGRES_HOST_AUTH_METHOD: "trust"
-    DATABASE_URL: "postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}"
+    DATABASE_URL: >-
+      postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}
   before_script:
     - echo "🔧 Node.js + PostgreSQL Environment Setup"
     - node --version
     - npm --version
-    # Install PostgreSQL client tools if not present
-    - if ! command -v pg_isready &> /dev/null; then apt-get update && apt-get install -y postgresql-client netcat-openbsd; fi
+    # Install PoSQL client tools if not present
+    - >-
+      if ! command -v pg_isready &> /dev/null; then apt-get update &&
+      apt-get install -y postgresql-client netcat-openbsd; fi
     # Wait for PostgreSQL to be ready
     - |
       echo "🔄 Waiting for PostgreSQL to be ready..."
       counter=0
       max_attempts=30
-      until pg_isready -h postgres -p 5432 -U postgres || [ $counter -eq $max_attempts ]; do
+      until pg_isready -h postgres -p 5432 -U postgres ||
+        [ $counter -eq $max_attempts ]; do
         echo "⏳ Attempt $((counter + 1))/$max_attempts..."
         sleep 2
         counter=$((counter + 1))
@@ -173,7 +180,10 @@ variables:
   before_script:
     - echo "🔧 Installing Trivy Security Scanner..."
     - apk add --no-cache curl
-    - curl -sfL https://raw.githubusercontent.com/aquasecurity/trivy/main/contrib/install.sh | sh -s -- -b /usr/local/bin
+    - >-
+      curl -sfL
+      https://raw.githubusercontent.com/aquasecurity/trivy/main/contrib/install.sh
+      | sh -s -- -b /usr/local/bin
     - echo "✅ Trivy installed successfully"
     - trivy --version
   tags:
@@ -546,7 +556,8 @@ test_frontend:
         --silent \
         --coverage \
         --coverageDirectory=coverage \
-        --collectCoverageFrom='["src/**/*.{js,jsx,ts,tsx}","!src/**/*.d.ts"]' \
+        --collectCoverageFrom='["src/**/*.{js,jsx,ts,tsx}",
+        "!src/**/*.d.ts"]' \
         --coverageReporters=cobertura \
         --coverageReporters=html \
         --coverageReporters=text \
@@ -579,77 +590,10 @@ test_frontend:
     when:
       - runner_system_failure
 
-test_backend:
-  stage: test
-  <<: *node_postgres_template
-  dependencies:
-    - install_backend_deps
-  script:
-    - |
-      echo "🧪 Running Backend Tests..."
-      cd backend
-
-      # Create coverage directory
-      mkdir -p coverage
-
-      # Run tests with CI configuration
-      echo "📊 Executing test suite..."
-      npm run test:ci || test_failed=true
-
-      # Display results
-      if [ "$test_failed" = true ]; then
-        echo "⚠️ Some tests failed"
-      else
-        echo "✅ All tests passed"
-      fi
-
-      echo "✅ Backend tests completed"
-  artifacts:
-    paths:
-      - backend/coverage/
-    reports:
-      junit: backend/test-results/*.xml
-      coverage_report:
-        coverage_format: cobertura
-        path: backend/coverage/cobertura-coverage.xml
-    expire_in: 1 week
-    when: always
-  rules:
-    - if: '$CI_COMMIT_REF_NAME == "dev" || $CI_COMMIT_REF_NAME == "main"'
-  allow_failure: true
-  timeout: 10 minutes
-
 # ========================================
 # STAGE 5: ANALYSIS
 # SonarQube code quality analysis
 # ========================================
-
-sonarqube_config:
-  stage: analysis
-  image: alpine:latest
-  script:
-    - |
-      echo "🔧 SonarQube Configuration Check"
-      echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-      echo "📋 Environment Variables:"
-      echo "  SONAR_HOST_URL: ${SONAR_HOST_URL:-❌ Not defined}"
-      echo "  SONAR_TOKEN: $(if [ -n \"${SONAR_TOKEN:-}\" ]; then echo '✅ Defined'; else echo '❌ Not defined'; fi)"
-      echo ""
-      echo "⚠️  IMPORTANT: For Local Runner Setup"
-      echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-      echo "If SONAR_TOKEN is not defined:"
-      echo "1. Edit: C:\\GitLab-Runner\\config.toml"
-      echo "2. Add to [runners.environment]:"
-      echo "   SONAR_TOKEN = \"your_sonarqube_token\""
-      echo "3. Restart runner: gitlab-runner restart"
-      echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-  rules:
-    - if: '$CI_COMMIT_REF_NAME == "dev" || $CI_COMMIT_REF_NAME == "main"'
-      when: always
-  tags:
-    - windows
-    - docker
-    - ems-platform
 
 sonarqube_frontend:
   stage: analysis
@@ -679,7 +623,8 @@ sonarqube_frontend:
         -Dsonar.projectName="EMS Platform - Frontend" \
         -Dsonar.projectVersion=${CI_COMMIT_SHORT_SHA} \
         -Dsonar.sources=app,components,hooks,lib,styles \
-        -Dsonar.exclusions=**/node_modules/**,**/.next/**,**/coverage/** \
+        -Dsonar.exclusions=**/node_modules/**,**/.next/**,
+        **/coverage/** \
         -Dsonar.host.url=${SONAR_HOST_URL} \
         -Dsonar.login=${SONAR_TOKEN} \
         -Dsonar.javascript.lcov.reportPaths=coverage/lcov.info \
@@ -724,11 +669,13 @@ sonarqube_backend:
         -Dsonar.projectName="EMS Platform - Backend" \
         -Dsonar.projectVersion=${CI_COMMIT_SHORT_SHA} \
         -Dsonar.sources=. \
-        -Dsonar.exclusions=**/node_modules/**,**/coverage/**,**/*.test.js,**/*.spec.js \
+        -Dsonar.exclusions=**/node_modules/**,**/coverage/**,
+        **/*.test.js,**/*.spec.js \
         -Dsonar.host.url=${SONAR_HOST_URL} \
         -Dsonar.login=${SONAR_TOKEN} \
         -Dsonar.javascript.lcov.reportPaths=coverage/lcov.info \
-        -Dsonar.coverage.exclusions=**/*.test.js,**/*.spec.js,**/node_modules/** \
+        -Dsonar.coverage.exclusions=**/*.test.js,**/*.spec.js,
+        **/node_modules/** \
         -Dsonar.qualitygate.wait=false \
         -Dsonar.scm.provider=git
 
@@ -747,62 +694,6 @@ sonarqube_backend:
 # STAGE 6: BUILD
 # Docker image building
 # ========================================
-
-build_frontend_image:
-  stage: build
-  <<: *docker_template
-  dependencies:
-    - test_frontend
-  script:
-    - |
-      echo "🏗️ Building Frontend Docker Image..."
-
-      # Build image with multiple tags
-      docker build \
-        -t $FRONTEND_IMAGE:$COMMIT_TAG \
-        -t $FRONTEND_IMAGE:latest \
-        ./client
-
-      # Display built images
-      echo "🔍 Built Images:"
-      docker images | grep "$FRONTEND_IMAGE"
-
-      echo "✅ Frontend image built successfully"
-  rules:
-    - if: '$CI_COMMIT_REF_NAME == "dev" || $CI_COMMIT_REF_NAME == "main"'
-  timeout: 20 minutes
-  retry:
-    max: 1
-    when:
-      - runner_system_failure
-
-build_backend_image:
-  stage: build
-  <<: *docker_template
-  dependencies:
-    - test_backend
-  script:
-    - |
-      echo "🏗️ Building Backend Docker Image..."
-
-      # Build image with multiple tags
-      docker build \
-        -t $BACKEND_IMAGE:$COMMIT_TAG \
-        -t $BACKEND_IMAGE:latest \
-        ./backend
-
-      # Display built images
-      echo "🔍 Built Images:"
-      docker images | grep "$BACKEND_IMAGE"
-
-      echo "✅ Backend image built successfully"
-  rules:
-    - if: '$CI_COMMIT_REF_NAME == "dev" || $CI_COMMIT_REF_NAME == "main"'
-  timeout: 15 minutes
-  retry:
-    max: 1
-    when:
-      - runner_system_failure
 
 build_db_image:
   stage: build
@@ -835,7 +726,8 @@ build_db_image:
 
       # Handle confidential data
       echo "🔒 Managing Confidential Data..."
-      if [ "$CI_COMMIT_REF_NAME" = "main" ] && [ -f "${EMPLOYEEDB_DUMP_FILE}" ]; then
+      if [ "$CI_COMMIT_REF_NAME" = "main" ] &&
+        [ -f "${EMPLOYEEDB_DUMP_FILE}" ]; then
         echo "📦 Using confidential dump for production..."
         cp "${EMPLOYEEDB_DUMP_FILE}" employeedb_dump.sql
         echo "✅ Confidential data copied ($(wc -l < employeedb_dump.sql) lines)"
@@ -995,40 +887,16 @@ trivy_scan_db:
 # Kubernetes manifest validation
 # ========================================
 
-k8s_yaml_validation:
-  stage: infrastructure
-  image: alpine:latest
-  before_script:
-    - apk add --no-cache py3-pip
-    - pip3 install yamllint --break-system-packages
-  script:
-    - |
-      echo "🔍 Validating Kubernetes YAML Manifests..."
-
-      # Run yamllint with configuration
-      yamllint -c .yamllint k8s/ || yaml_errors=true
-
-      if [ "$yaml_errors" = true ]; then
-        echo "❌ YAML validation failed!"
-        exit 1
-      fi
-
-      echo "✅ YAML validation successful"
-  rules:
-    - if: '$CI_COMMIT_REF_NAME == "dev" || $CI_COMMIT_REF_NAME == "main"'
-  allow_failure: true
-  tags:
-    - windows
-    - docker
-    - ems-platform
-
 kube_linter:
   stage: infrastructure
   image: alpine:latest
   before_script:
     - echo "🔧 Installing kube-linter..."
     - apk add --no-cache curl tar
-    - curl -L https://github.com/stackrox/kube-linter/releases/download/v0.6.8/kube-linter-linux.tar.gz -o kube-linter.tar.gz
+    - >-
+      curl -L
+      https://github.com/stackrox/kube-linter/releases/download/v0.6.8/kube-linter-linux.tar.gz
+      -o kube-linter.tar.gz
     - tar -xzf kube-linter.tar.gz
     - chmod +x kube-linter
     - mv kube-linter /usr/local/bin/
@@ -1040,8 +908,8 @@ kube_linter:
 
       # Run kube-linter analysis
       echo "📋 Analyzing Kubernetes manifests..."
-      kube-linter lint k8s/ \
-        --format sarif > artifacts/kube-linter-report.sarif || true
+      kube-linter lint k8s/ --format sarif >
+        artifacts/kube-linter-report.sarif || true
 
       kube-linter lint k8s/ \
         --format plain || true
@@ -1060,59 +928,16 @@ kube_linter:
     - docker
     - ems-platform
 
-kubectl_dry_run:
-  stage: infrastructure
-  image:
-    name: bitnami/kubectl:latest
-    entrypoint: [""]
-  before_script:
-    - echo "🔧 Configuring kubectl..."
-    - mkdir -p ~/.kube
-
-    # Write kubeconfig
-    - echo "$KUBECONFIG_CONTENT" > ~/.kube/config
-
-    # Fix localhost issue for Local Runner
-    - sed -i 's/127.0.0.1/host.docker.internal/g' ~/.kube/config
-    - sed -i 's/localhost/host.docker.internal/g' ~/.kube/config
-
-    # Display configuration
-    - echo "🔍 Available contexts:"
-    - kubectl config get-contexts || true
-
-    - echo "📌 Current context:"
-    - kubectl config current-context || echo "No context defined"
-
-    # Try to use k3d context
-    - echo "📌 Attempting to use k3d-ems-platform-cluster..."
-    - kubectl config use-context k3d-ems-platform-cluster || kubectl config use-context $(kubectl config get-contexts -o name | head -n 1) || echo "⚠️ No context available"
-  script:
-    - |
-      echo "🚫 Simulating Complete Deployment (dry-run)..."
-
-      # Run kubectl dry-run
-      kubectl apply \
-        --dry-run=client \
-        --validate=false \
-        -f k8s/ \
-        --recursive || true
-
-      echo "✅ Dry-run completed (validation disabled - no cluster connection)"
-  rules:
-    - if: '$CI_COMMIT_REF_NAME == "dev" || $CI_COMMIT_REF_NAME == "main"'
-  allow_failure: true
-  tags:
-    - windows
-    - docker
-    - ems-platform
-
 kubeconform_validate:
   stage: infrastructure
   image: alpine:latest
   before_script:
     - echo "🔧 Installing kubeconform..."
     - apk add --no-cache curl tar
-    - curl -L https://github.com/yannh/kubeconform/releases/download/v0.6.4/kubeconform-linux-amd64.tar.gz -o kubeconform.tar.gz
+    - >-
+      curl -L
+      https://github.com/yannh/kubeconform/releases/download/v0.6.4/kubeconform-linux-amd64.tar.gz
+      -o kubeconform.tar.gz
     - tar -xzf kubeconform.tar.gz
     - chmod +x kubeconform
     - mv kubeconform /usr/local/bin/
@@ -1141,83 +966,20 @@ kubeconform_validate:
 # Push images & update manifests
 # ========================================
 
-push_images:
-  stage: gitops
-  image: docker:24
-  variables:
-    DOCKER_TLS_CERTDIR: ""
-    DOCKER_BUILDKIT: "1"
-  before_script:
-    - echo "🔧 Docker Environment Setup"
-    - docker --version
-    - docker info
-    - echo "📦 Authenticating with Docker Hub..."
-    - echo "$DOCKERHUB_TOKEN" | docker login -u "$DOCKERHUB_USERNAME" --password-stdin
-  
-  dependencies:
-    - trivy_scan_frontend
-    - trivy_scan_backend
-    - trivy_scan_db
-  
-  script:
-    - |
-      echo "🚀 Pushing Images to Docker Hub..."
-
-      if [ "$CI_COMMIT_REF_NAME" = "main" ]; then
-        echo "📦 Pushing Production Images..."
-        
-        docker push $FRONTEND_IMAGE:$COMMIT_TAG
-        docker push $FRONTEND_IMAGE:latest
-        
-        docker push $BACKEND_IMAGE:$COMMIT_TAG
-        docker push $BACKEND_IMAGE:latest
-        
-        docker push $DB_IMAGE:$COMMIT_TAG
-        docker push $DB_IMAGE:latest
-        
-        echo "✅ All production images pushed successfully"
-
-      elif [ "$CI_COMMIT_REF_NAME" = "dev" ]; then
-        echo "📦 Pushing Development Images..."
-        
-        docker push $FRONTEND_IMAGE:$COMMIT_TAG
-        docker push $BACKEND_IMAGE:$COMMIT_TAG
-        docker push $DB_IMAGE:$COMMIT_TAG
-        
-        echo "✅ Development images pushed successfully"
-      fi
-
-      echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-      echo "📦 Pushed Images:"
-      echo "  Frontend: $FRONTEND_IMAGE:$COMMIT_TAG"
-      echo "  Backend:  $BACKEND_IMAGE:$COMMIT_TAG"
-      echo "  Database: $DB_IMAGE:$COMMIT_TAG"
-      if [ "$CI_COMMIT_REF_NAME" = "main" ]; then
-        echo "  (Also tagged as :latest)"
-      fi
-      echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-  
-  rules:
-    - if: '$CI_COMMIT_REF_NAME == "dev" || $CI_COMMIT_REF_NAME == "main"'
-  
-  timeout: 15 minutes
-  
-  tags:
-    - windows
-    - docker
-    - ems-platform
-
 update_manifests:
   stage: gitops
   image: alpine:latest
-  
+
   needs:
     - push_images
-  
+
   before_script:
     - echo "🔧 Setting up GitOps environment..."
     - apk add --no-cache git openssh-client bash wget
-    - wget https://github.com/mikefarah/yq/releases/download/v4.40.5/yq_linux_amd64 -O /usr/bin/yq
+    - >-
+      wget
+      https://github.com/mikefarah/yq/releases/download/v4.40.5/yq_linux_amd64
+      -O /usr/bin/yq
     - chmod +x /usr/bin/yq
     - yq --version
     - mkdir -p ~/.ssh
@@ -1228,14 +990,16 @@ update_manifests:
     - chmod 644 ~/.ssh/known_hosts
     - git config --global user.email "ci@ems-platform.com"
     - git config --global user.name "GitLab CI Bot"
-    - git config --global core.sshCommand "ssh -i ~/.ssh/id_rsa -o StrictHostKeyChecking=no"
-  
+    - >-
+      git config --global core.sshCommand
+      "ssh -i ~/.ssh/id_rsa -o StrictHostKeyChecking=no"
+
   script:
     - |
       echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
       echo "🔄 GITOPS: Updating Kubernetes Manifests"
       echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-      
+
       if [ "$CI_COMMIT_REF_NAME" = "main" ]; then
         OVERLAY="prod"
         IMAGE_TAG="latest"
@@ -1245,67 +1009,67 @@ update_manifests:
         IMAGE_TAG="$COMMIT_TAG"
         echo "🛠️  Environment: DEVELOPMENT"
       fi
-      
+
       echo "📦 Image Tag: $IMAGE_TAG"
       echo "🌿 Git Branch: $CI_COMMIT_REF_NAME"
       echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-      
+
       echo ""
       echo "📥 Cloning GitOps repository..."
       git clone git@gitlab.com:amineelalami05/ems-gitops.git
       cd ems-gitops
-      
+
       KUSTOMIZE_FILE="k8s/overlays/$OVERLAY/kustomization.yaml"
       if [ ! -f "$KUSTOMIZE_FILE" ]; then
         echo "❌ ERROR: File not found: $KUSTOMIZE_FILE"
         exit 1
       fi
-      
+
       echo ""
       echo "🔍 Current image tags:"
       yq eval '.images[] | .name + " → " + .newTag' "$KUSTOMIZE_FILE"
-      
+
       echo ""
       echo "✏️  Updating image tags to: $IMAGE_TAG"
       yq eval ".images[0].newTag = \"$IMAGE_TAG\"" -i "$KUSTOMIZE_FILE"
       yq eval ".images[1].newTag = \"$IMAGE_TAG\"" -i "$KUSTOMIZE_FILE"
       yq eval ".images[2].newTag = \"$IMAGE_TAG\"" -i "$KUSTOMIZE_FILE"
-      
+
       echo ""
       echo "✅ New image tags:"
       yq eval '.images[] | .name + " → " + .newTag' "$KUSTOMIZE_FILE"
-      
+
       if git diff --quiet "$KUSTOMIZE_FILE"; then
         echo ""
         echo "ℹ️  No changes detected - images already up to date"
         exit 0
       fi
-      
+
       echo ""
       echo "📝 Changes to be committed:"
       git diff "$KUSTOMIZE_FILE"
-      
+
       echo ""
       echo "📤 Committing changes..."
       git add "$KUSTOMIZE_FILE"
-      
+
       git commit -m "🚀 Deploy $OVERLAY: Update images to $IMAGE_TAG
 
-Pipeline: $CI_PIPELINE_URL
-Commit: $CI_COMMIT_SHORT_SHA
-Branch: $CI_COMMIT_REF_NAME
-Job: $CI_JOB_ID
-Triggered by: $GITLAB_USER_LOGIN
+      Pipeline: $CI_PIPELINE_URL
+      Commit: $CI_COMMIT_SHORT_SHA
+      Branch: $CI_COMMIT_REF_NAME
+      Job: $CI_JOB_ID
+      Triggered by: $GITLAB_USER_LOGIN
 
-Images updated:
-- backend-image  → amineelalami/ems-platform-backend:$IMAGE_TAG
-- frontend-image → amineelalami/ems-platform-frontend:$IMAGE_TAG
-- database-image → amineelalami/ems-platform-db:$IMAGE_TAG"
-      
+      Images updated:
+      - backend-image → amineelalami/ems-platform-backend:$IMAGE_TAG
+      - frontend-image → amineelalami/ems-platform-frontend:$IMAGE_TAG
+      - database-image → amineelalami/ems-platform-db:$IMAGE_TAG"
+
       echo ""
       echo "⬆️  Pushing to remote repository..."
       git push origin main
-      
+
       echo ""
       echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
       echo "✅ GitOps manifests updated successfully!"
@@ -1315,15 +1079,15 @@ Images updated:
       echo "   kubectl get applications -n argocd"
       echo "   kubectl get pods -n ems-platform -w"
       echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-  
+
   rules:
     - if: '$CI_COMMIT_REF_NAME == "dev"'
       when: on_success
     - if: '$CI_COMMIT_REF_NAME == "main"'
       when: manual
-  
+
   allow_failure: false
-  
+
   tags:
     - linux
     - docker
@@ -1332,10 +1096,10 @@ Images updated:
 notify_success:
   stage: gitops
   image: alpine:latest
-  
+
   needs:
     - update_manifests
-  
+
   script:
     - |
       echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
@@ -1344,15 +1108,15 @@ notify_success:
       echo ""
       echo "📊 PIPELINE SUMMARY:"
       echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-      echo "✅ Stage 1 - Setup:          Dependencies installed"
-      echo "✅ Stage 2 - Quality:        Code quality verified"
-      echo "✅ Stage 3 - Security:       Security scans completed"
-      echo "✅ Stage 4 - Test:           All tests passed"
-      echo "✅ Stage 5 - Analysis:       SonarQube analysis done"
-      echo "✅ Stage 6 - Build:          3 Docker images built"
-      echo "✅ Stage 7 - Image Scan:     Container scans completed"
+      echo "✅ Stage 1 - Setup: Dependencies installed"
+      echo "✅ Stage 2 - Quality: Code quality verified"
+      echo "✅ Stage 3 - Security: Security scans completed"
+      echo "✅ Stage 4 - Test: All tests passed"
+      echo "✅ Stage 5 - Analysis: SonarQube analysis done"
+      echo "✅ Stage 6 - Build: 3 Docker images built"
+      echo "✅ Stage 7 - Image Scan: Container scans completed"
       echo "✅ Stage 8 - Infrastructure: K8s manifests validated"
-      echo "✅ Stage 9 - GitOps:         Images pushed & manifests updated"
+      echo "✅ Stage 9 - GitOps: Images pushed & manifests updated"
       echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
       echo ""
 
@@ -1376,9 +1140,9 @@ notify_success:
       echo "🔄 ArgoCD will deploy automatically"
       echo "⏱️  Completed: $(date '+%Y-%m-%d %H:%M:%S')"
       echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-  
+
   when: on_success
-  
+
   tags:
     - linux
     - docker
@@ -1389,27 +1153,27 @@ cleanup:
   image: docker:24
   variables:
     DOCKER_TLS_CERTDIR: ""
-  
+
   before_script:
     - docker --version
-  
+
   script:
     - |
       echo "🧹 Performing Pipeline Cleanup..."
       echo "🔍 Current Docker Disk Usage:"
       docker system df
-      
+
       echo "🔄 Pruning unused resources..."
       docker system prune -f
-      
+
       echo "✅ Cleanup completed"
       echo "🔍 Updated Docker Disk Usage:"
       docker system df
-  
+
   when: always
   allow_failure: true
   timeout: 5 minutes
-  
+
   tags:
     - windows
     - docker
