@@ -176,21 +176,17 @@ install_frontend_deps:
       echo "📦 Installing Frontend Dependencies..."
       cd client
 
-      # Display project structure
       echo "🔍 Project Structure:"
       ls -la
 
-      # Clean npm cache for fresh installation
       echo "🗑️ Cleaning npm cache..."
       npm cache clean --force
 
-      # Install dependencies with verbose logging
       echo "📥 Installing dependencies..."
       npm install --no-audit --no-fund --loglevel=verbose
 
       echo "✅ Frontend dependencies installed successfully"
 
-      # Display dependency size
       echo "📊 Dependency Size:"
       du -sh node_modules || echo "Could not calculate size"
   cache:
@@ -198,10 +194,6 @@ install_frontend_deps:
     paths:
       - client/node_modules/
     policy: pull-push
-  artifacts:
-    paths:
-      - client/node_modules/
-    expire_in: 1 hour
   rules:
     - if: '$CI_COMMIT_REF_NAME == "dev" || $CI_COMMIT_REF_NAME == "main"'
   timeout: 20 minutes
@@ -219,11 +211,9 @@ install_backend_deps:
       echo "📦 Installing Backend Dependencies..."
       cd backend
 
-      # Display project structure
       echo "🔍 Project Structure:"
       ls -la
 
-      # Check for existing node_modules (cache optimization)
       echo "🔍 Checking for cached dependencies..."
       if [ -d "node_modules" ]; then
         echo "🔄 Cache found! Using npm ci for faster installation..."
@@ -235,15 +225,12 @@ install_backend_deps:
         echo "✅ Dependencies installed successfully"
       fi
 
-      # Verify Prisma installation
       echo "🔍 Verifying Prisma installation..."
       npx prisma@6.18.0 --version
 
-      # Generate Prisma Client
       echo "🗄️ Generating Prisma Client..."
       npx prisma@6.18.0 generate --no-hints
 
-      # Display dependency size
       echo "📊 Dependency Size:"
       du -sh node_modules || echo "Could not calculate size"
   cache:
@@ -253,12 +240,6 @@ install_backend_deps:
       - backend/node_modules/.prisma/
       - backend/node_modules/@prisma/
     policy: pull-push
-  artifacts:
-    paths:
-      - backend/node_modules/
-      - backend/node_modules/.prisma/
-      - backend/node_modules/@prisma/
-    expire_in: 1 hour
   rules:
     - if: '$CI_COMMIT_REF_NAME == "dev" || $CI_COMMIT_REF_NAME == "main"'
   timeout: 20 minutes
