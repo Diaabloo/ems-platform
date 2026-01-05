@@ -93,9 +93,9 @@ variables:
     - name: postgres:${POSTGRES_VERSION}
       alias: postgres
       variables:
-        POSTGRES_USER: ${POSTGRES_USER}
-        POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
-        POSTGRES_DB: ${POSTGRES_DB}
+        POSTGRES_USER: "${POSTGRES_USER}"
+        POSTGRES_PASSWORD: "${POSTGRES_PASSWORD}"
+        POSTGRES_DB: "${POSTGRES_DB}"
       command:
         [
           "postgres",
@@ -120,8 +120,8 @@ variables:
       echo "🔄 Waiting for PostgreSQL to be ready..."
       counter=0
       max_attempts=30
-      # Changement ici : on utilise ${POSTGRES_USER}
-      until pg_isready -h postgres -p 5432 -U ${POSTGRES_USER} || [ $counter -eq $max_attempts ]; do
+      TARGET_USER="${POSTGRES_USER:-postgres}"
+      until pg_isready -h postgres -p 5432 -U "$TARGET_USER" || [ $counter -eq $max_attempts ]; do
         echo "⏳ Attempt $((counter + 1))/$max_attempts..."
         sleep 2
         counter=$((counter + 1))
