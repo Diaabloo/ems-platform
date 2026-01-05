@@ -88,7 +88,7 @@ variables:
 
 # Template: Node.js + PostgreSQL Environment
 .node_postgres_template: &node_postgres_template
-  image: node:${NODE_VERSION}
+  image: node:20
   services:
     - name: postgres:15
       alias: postgres
@@ -97,14 +97,14 @@ variables:
         POSTGRES_DB: "emsdb"
         POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
   variables:
-    POSTGRES_HOST: postgres
-    POSTGRES_PORT: 5432
     FF_NETWORK_PER_BUILD: "true"
     DATABASE_URL: "postgresql://amine:${POSTGRES_PASSWORD}@postgres:5432/emsdb?schema=public"
   before_script:
     - apt-get update > /dev/null && apt-get install -y postgresql-client > /dev/null
     - |
-      echo "🔄 Waiting for PostgreSQL (${POSTGRES_USER}) to be ready..."
+      echo "🕵️ Testing connection with psql..."
+      sleep 5
+      PGPASSWORD="${POSTGRES_PASSWORD}" psql -h postgres -U amine -d emsdb -c "SELECT 1;"      echo "🔄 Waiting for PostgreSQL (${POSTGRES_USER}) to be ready..."
       counter=0
       until pg_isready -h postgres -U "${POSTGRES_USER}" || [ $counter -eq 30 ]; do
         sleep 2
