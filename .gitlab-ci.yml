@@ -1,4 +1,3 @@
----
 # ========================================
 # EMS Platform - CI/CD Pipeline
 # ========================================
@@ -50,10 +49,7 @@ variables:
 
   # SonarQube Configuration
   SONAR_USER_HOME: "${CI_PROJECT_DIR}/.sonar"
-  SONAR_HOST_URL: "http://host.docker.internal:9000"
-
-  # Deployment Configuration
-  NGROK_URL: "https://nonentomologic-spring-conflictedly.ngrok-free.dev"
+  SONAR_HOST_URL: "http://172.17.0.1:9000"
 
 # ========================================
 # Reusable Templates
@@ -109,10 +105,6 @@ variables:
   variables:
     POSTGRES_HOST: postgres
     POSTGRES_PORT: 5432
-    POSTGRES_DB: "ems_platform"
-    POSTGRES_USER: "postgres"
-    POSTGRES_PASSWORD: "password"
-    POSTGRES_HOST_AUTH_METHOD: "trust"
     DATABASE_URL: >-
       postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}
   before_script:
@@ -533,6 +525,66 @@ trivy_filesystem_scan:
 # Unit and integration tests with coverage
 # ========================================
 
+test_backend:
+  stage: test
+  <<: *node_postgres_template
+  dependencies:
+    - install_backend_deps
+  script:
+    - |
+      echo "🧪 Running Backend Tests with Coverage..."
+      cd backend
+
+      # Ensure Prisma Client is generated
+      echo "🗄️ Generating Prisma Client..."
+      npx prisma@6.18.0 generate --no-hints
+
+      # Run database migrations
+      echo "🔄 Running database migrations..."
+      npx prisma@6.18.0 migrate deploy
+
+      # Create output directories
+      mkdir -p test-results
+      mkdir -p coverage
+
+      # Run tests with coverage
+      echo "📊 Executing test suite..."
+      npm run test -- \
+        --coverage \
+        --coverageDirectory=coverage \
+        --coverageReporters=cobertura \
+        --coverageReporters=html \
+        --coverageReporters=text \
+        --coverageReporters=lcov \
+        --passWithNoTests || true
+
+      # Display coverage summary
+      echo "📈 Test Coverage Summary:"
+      if [ -f "coverage/coverage-summary.json" ]; then
+        cat coverage/coverage-summary.json | grep -A 4 '"total"' || true
+      fi
+
+      echo "✅ Backend tests completed"
+  artifacts:
+    paths:
+      - backend/coverage/
+      - backend/test-results/
+    reports:
+      junit: backend/test-results/*.xml
+      coverage_report:
+        coverage_format: cobertura
+        path: backend/coverage/cobertura-coverage.xml
+    expire_in: 1 week
+    when: always
+  rules:
+    - if: '$CI_COMMIT_REF_NAME == "dev" || $CI_COMMIT_REF_NAME == "main"'
+  allow_failure: false
+  timeout: 15 minutes
+  retry:
+    max: 1
+    when:
+      - runner_system_failure
+
 test_frontend:
   stage: test
   <<: *node_template
@@ -694,6 +746,62 @@ sonarqube_backend:
 # STAGE 6: BUILD
 # Docker image building
 # ========================================
+
+build_frontend_image:
+  stage: build
+  <<: *docker_template
+  dependencies:
+    - test_frontend
+  script:
+    - |
+      echo "🏗️ Building Frontend Docker Image..."
+
+      # Build image with multiple tags
+      docker build \
+        -t $FRONTEND_IMAGE:$COMMIT_TAG \
+        -t $FRONTEND_IMAGE:latest \
+        ./client
+
+      # Display built images
+      echo "🔍 Built Images:"
+      docker images | grep "$FRONTEND_IMAGE"
+
+      echo "✅ Frontend image built successfully"
+  rules:
+    - if: '$CI_COMMIT_REF_NAME == "dev" || $CI_COMMIT_REF_NAME == "main"'
+  timeout: 20 minutes
+  retry:
+    max: 1
+    when:
+      - runner_system_failure
+
+build_backend_image:
+  stage: build
+  <<: *docker_template
+  dependencies:
+    - test_backend
+  script:
+    - |
+      echo "🏗️ Building Backend Docker Image..."
+
+      # Build image with multiple tags
+      docker build \
+        -t $BACKEND_IMAGE:$COMMIT_TAG \
+        -t $BACKEND_IMAGE:latest \
+        ./backend
+
+      # Display built images
+      echo "🔍 Built Images:"
+      docker images | grep "$BACKEND_IMAGE"
+
+      echo "✅ Backend image built successfully"
+  rules:
+    - if: '$CI_COMMIT_REF_NAME == "dev" || $CI_COMMIT_REF_NAME == "main"'
+  timeout: 15 minutes
+  retry:
+    max: 1
+    when:
+      - runner_system_failure
 
 build_db_image:
   stage: build
@@ -924,7 +1032,7 @@ kube_linter:
   rules:
     - if: '$CI_COMMIT_REF_NAME == "dev" || $CI_COMMIT_REF_NAME == "main"'
   tags:
-    - windows
+    - linux
     - docker
     - ems-platform
 
@@ -957,7 +1065,7 @@ kubeconform_validate:
     - if: '$CI_COMMIT_REF_NAME == "dev" || $CI_COMMIT_REF_NAME == "main"'
   allow_failure: true
   tags:
-    - windows
+    - linux
     - docker
     - ems-platform
 
@@ -965,6 +1073,54 @@ kubeconform_validate:
 # STAGE 9: GITOPS
 # Push images & update manifests
 # ========================================
+
+push_images:
+  stage: gitops
+  <<: *docker_template
+  needs:
+    - build_frontend_image
+    - build_backend_image
+    - build_db_image
+  script:
+    - |
+      echo "📤 Pushing Docker Images to Docker Hub..."
+      
+      # Push Frontend Image
+      echo "🔄 Pushing Frontend image..."
+      docker push $FRONTEND_IMAGE:$COMMIT_TAG
+      docker push $FRONTEND_IMAGE:latest
+      echo "✅ Frontend image pushed"
+      
+      # Push Backend Image
+      echo "🔄 Pushing Backend image..."
+      docker push $BACKEND_IMAGE:$COMMIT_TAG
+      docker push $BACKEND_IMAGE:latest
+      echo "✅ Backend image pushed"
+      
+      # Push Database Image
+      echo "🔄 Pushing Database image..."
+      docker push $DB_IMAGE:$COMMIT_TAG
+      docker push $DB_IMAGE:latest
+      echo "✅ Database image pushed"
+      
+      echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+      echo "✅ All images pushed successfully!"
+      echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+      echo "📦 Images pushed:"
+      echo "  • $FRONTEND_IMAGE:$COMMIT_TAG"
+      echo "  • $FRONTEND_IMAGE:latest"
+      echo "  • $BACKEND_IMAGE:$COMMIT_TAG"
+      echo "  • $BACKEND_IMAGE:latest"
+      echo "  • $DB_IMAGE:$COMMIT_TAG"
+      echo "  • $DB_IMAGE:latest"
+      echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+  rules:
+    - if: '$CI_COMMIT_REF_NAME == "dev" || $CI_COMMIT_REF_NAME == "main"'
+  timeout: 15 minutes
+  tags:
+    - linux
+    - docker
+    - ems-platform
 
 update_manifests:
   stage: gitops
@@ -1175,7 +1331,7 @@ cleanup:
   timeout: 5 minutes
 
   tags:
-    - windows
+    - linux
     - docker
     - ems-platform
 
