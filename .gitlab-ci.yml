@@ -92,6 +92,10 @@ variables:
   services:
     - name: postgres:${POSTGRES_VERSION}
       alias: postgres
+      variables:
+        POSTGRES_USER: ${POSTGRES_USER}
+        POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+        POSTGRES_DB: ${POSTGRES_DB}
       command:
         [
           "postgres",
@@ -105,23 +109,19 @@ variables:
   variables:
     POSTGRES_HOST: postgres
     POSTGRES_PORT: 5432
-    DATABASE_URL: >-
-      postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}
+    # Utilisation de guillemets pour une URL plus robuste
+    DATABASE_URL: "postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}?schema=public"
   before_script:
     - echo "🔧 Node.js + PostgreSQL Environment Setup"
     - node --version
     - npm --version
-    # Install PoSQL client tools if not present
-    - >-
-      if ! command -v pg_isready &> /dev/null; then apt-get update &&
-      apt-get install -y postgresql-client netcat-openbsd; fi
-    # Wait for PostgreSQL to be ready
+    - if ! command -v pg_isready &> /dev/null; then apt-get update && apt-get install -y postgresql-client netcat-openbsd; fi
     - |
       echo "🔄 Waiting for PostgreSQL to be ready..."
       counter=0
       max_attempts=30
-      until pg_isready -h postgres -p 5432 -U postgres ||
-        [ $counter -eq $max_attempts ]; do
+      # Changement ici : on utilise ${POSTGRES_USER}
+      until pg_isready -h postgres -p 5432 -U ${POSTGRES_USER} || [ $counter -eq $max_attempts ]; do
         echo "⏳ Attempt $((counter + 1))/$max_attempts..."
         sleep 2
         counter=$((counter + 1))
@@ -475,15 +475,11 @@ validate_prisma_schema:
     - |
       echo "🗄️ Validating Prisma Schema..."
       cd backend
-
-      # Validate schema syntax
       echo "🔍 Validating schema syntax..."
-      npx prisma@6.18.0 validate
-
-      # Test database connection
+      npx prisma validate
       echo "🔍 Testing database connection..."
-      npx prisma@6.18.0 db execute --stdin --url "$DATABASE_URL" <<< "SELECT version();"
-
+      # Prisma utilisera automatiquement l'URL injectée
+      npx prisma db execute --stdin --url "$DATABASE_URL" <<< "SELECT version();"
       echo "✅ Database connection verified"
       echo "✅ Prisma schema validation successful"
   rules:
