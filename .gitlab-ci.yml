@@ -93,44 +93,23 @@ variables:
     - name: postgres:${POSTGRES_VERSION}
       alias: postgres
       variables:
-        POSTGRES_USER: "${POSTGRES_USER}"
-        POSTGRES_PASSWORD: "${POSTGRES_PASSWORD}"
-        POSTGRES_DB: "${POSTGRES_DB}"
-      command:
-        [
-          "postgres",
-          "-c",
-          "shared_preload_libraries=pg_stat_statements",
-          "-c",
-          "max_connections=200",
-          "-c",
-          "log_statement=all",
-        ]
+        POSTGRES_USER: ${POSTGRES_USER}
+        POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+        POSTGRES_DB: ${POSTGRES_DB}
   variables:
     POSTGRES_HOST: postgres
     POSTGRES_PORT: 5432
-    # Utilisation de guillemets pour une URL plus robuste
     DATABASE_URL: "postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}?schema=public"
   before_script:
-    - echo "🔧 Node.js + PostgreSQL Environment Setup"
-    - node --version
-    - npm --version
-    - if ! command -v pg_isready &> /dev/null; then apt-get update && apt-get install -y postgresql-client netcat-openbsd; fi
+    - apt-get update > /dev/null && apt-get install -y postgresql-client > /dev/null
     - |
-      echo "🔄 Waiting for PostgreSQL to be ready..."
+      echo "🔄 Waiting for PostgreSQL (${POSTGRES_USER}) to be ready..."
       counter=0
-      max_attempts=30
-      TARGET_USER="${POSTGRES_USER:-postgres}"
-      until pg_isready -h postgres -p 5432 -U "$TARGET_USER" || [ $counter -eq $max_attempts ]; do
-        echo "⏳ Attempt $((counter + 1))/$max_attempts..."
+      until pg_isready -h postgres -U "${POSTGRES_USER}" || [ $counter -eq 30 ]; do
         sleep 2
         counter=$((counter + 1))
+        echo "⏳ Attempt $counter/30..."
       done
-      if [ $counter -eq $max_attempts ]; then
-        echo "❌ PostgreSQL failed to start!"
-        exit 1
-      fi
-      echo "✅ PostgreSQL is ready!"
   tags:
     - linux
     - docker
