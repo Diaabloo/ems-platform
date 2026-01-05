@@ -90,16 +90,16 @@ variables:
 .node_postgres_template: &node_postgres_template
   image: node:${NODE_VERSION}
   services:
-    - name: postgres:${POSTGRES_VERSION}
+    - name: postgres:15
       alias: postgres
       variables:
-        POSTGRES_USER: ${POSTGRES_USER}
+        POSTGRES_USER: "amine"
+        POSTGRES_DB: "emsdb"
         POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
-        POSTGRES_DB: ${POSTGRES_DB}
   variables:
     POSTGRES_HOST: postgres
     POSTGRES_PORT: 5432
-    DATABASE_URL: "postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}?schema=public"
+    DATABASE_URL: "postgresql://amine:${POSTGRES_PASSWORD}@postgres:5432/emsdb?schema=public"
   before_script:
     - apt-get update > /dev/null && apt-get install -y postgresql-client > /dev/null
     - |
