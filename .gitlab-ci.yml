@@ -99,6 +99,7 @@ variables:
   variables:
     POSTGRES_HOST: postgres
     POSTGRES_PORT: 5432
+    FF_NETWORK_PER_BUILD: "true"
     DATABASE_URL: "postgresql://amine:${POSTGRES_PASSWORD}@postgres:5432/emsdb?schema=public"
   before_script:
     - apt-get update > /dev/null && apt-get install -y postgresql-client > /dev/null
@@ -448,16 +449,16 @@ audit_backend:
 validate_prisma_schema:
   stage: security
   <<: *node_postgres_template
-  dependencies:
-    - install_backend_deps
+  # dependencies:
+  #   - install_backend_deps
   script:
     - |
       echo "🗄️ Validating Prisma Schema..."
       cd backend
+      npm install @prisma/client prisma --quiet
       echo "🔍 Validating schema syntax..."
       npx prisma validate
       echo "🔍 Testing database connection..."
-      # Prisma utilisera automatiquement l'URL injectée
       npx prisma db execute --stdin --url "$DATABASE_URL" <<< "SELECT version();"
       echo "✅ Database connection verified"
       echo "✅ Prisma schema validation successful"
