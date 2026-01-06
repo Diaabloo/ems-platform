@@ -592,26 +592,23 @@ sonarqube_frontend:
     - |
       echo "📊 SonarQube Analysis - Frontend"
 
-      # Verify SONAR_TOKEN is set
-      if [ -z "${SONAR_TOKEN:-}" ]; then
+      if [ -z "${SONAR_TOKEN}" ]; then
         echo "❌ ERROR: SONAR_TOKEN is not defined!"
-        echo "Please configure SONAR_TOKEN in your GitLab Runner"
         exit 1
       fi
 
       echo "✅ Configuration validated"
       echo "🔗 SonarQube Server: $SONAR_HOST_URL"
 
-      # Run SonarQube analysis
       cd client
 
+      # Note: Toutes les exclusions sont sur une seule ligne pour éviter les erreurs de parsing
       sonar-scanner \
         -Dsonar.projectKey=ems-platform-frontend \
         -Dsonar.projectName="EMS Platform - Frontend" \
         -Dsonar.projectVersion=${CI_COMMIT_SHORT_SHA} \
         -Dsonar.sources=app,components,hooks,lib,styles \
-        -Dsonar.exclusions=**/node_modules/**,**/.next/**,
-        **/coverage/** \
+        -Dsonar.exclusions=**/node_modules/**,**/.next/**,**/coverage/** \
         -Dsonar.host.url=${SONAR_HOST_URL} \
         -Dsonar.login=${SONAR_TOKEN} \
         -Dsonar.javascript.lcov.reportPaths=coverage/lcov.info \
@@ -639,8 +636,7 @@ sonarqube_backend:
     - |
       echo "📊 SonarQube Analysis - Backend"
 
-      # Verify SONAR_TOKEN is set
-      if [ -z "${SONAR_TOKEN:-}" ]; then
+      if [ -z "${SONAR_TOKEN}" ]; then
         echo "❌ ERROR: SONAR_TOKEN is not defined!"
         exit 1
       fi
@@ -648,7 +644,6 @@ sonarqube_backend:
       echo "✅ Configuration validated"
       echo "🔗 SonarQube Server: $SONAR_HOST_URL"
 
-      # Run SonarQube analysis
       cd backend
 
       sonar-scanner \
@@ -656,13 +651,11 @@ sonarqube_backend:
         -Dsonar.projectName="EMS Platform - Backend" \
         -Dsonar.projectVersion=${CI_COMMIT_SHORT_SHA} \
         -Dsonar.sources=. \
-        -Dsonar.exclusions=**/node_modules/**,**/coverage/**,
-        **/*.test.js,**/*.spec.js \
+        -Dsonar.exclusions=**/node_modules/**,**/coverage/**,**/*.test.js,**/*.spec.js \
         -Dsonar.host.url=${SONAR_HOST_URL} \
         -Dsonar.login=${SONAR_TOKEN} \
         -Dsonar.javascript.lcov.reportPaths=coverage/lcov.info \
-        -Dsonar.coverage.exclusions=**/*.test.js,**/*.spec.js,
-        **/node_modules/** \
+        -Dsonar.coverage.exclusions=**/*.test.js,**/*.spec.js,**/node_modules/** \
         -Dsonar.qualitygate.wait=false \
         -Dsonar.scm.provider=git
 
