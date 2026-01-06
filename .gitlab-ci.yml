@@ -546,46 +546,45 @@ test_backend:
 test_frontend:
   stage: test
   <<: *node_template
-  dependencies:
-    - install_frontend_deps
+  dependencies: [] # On n'attend pas d'artifacts
+  cache:
+    key: "frontend-npm-${CI_COMMIT_REF_SLUG}"
+    paths:
+      - client/node_modules/
+    policy: pull
   script:
     - |
-      echo "🧪 Running Frontend Tests with Coverage..."
+      echo "🧪 Running Frontend Tests..."
       cd client
 
-      # Create output directories
-      mkdir -p test-results
-      mkdir -p coverage
+      # Sécurité : Si le cache a échoué, on installe vite fait
+      if [ ! -d "node_modules" ]; then
+        echo "📦 node_modules missing, installing..."
+        npm install --prefer-offline --no-audit
+      fi
 
-      # Run Jest tests with coverage
-      echo "📊 Executing test suite..."
-      ./node_modules/.bin/jest \
+      mkdir -p test-results coverage
+
+      echo "📊 Executing Jest..."
+      # On utilise 'npx' pour être sûr de trouver Jest même sans le chemin complet
+      # On pointe vers ton fichier de config spécifique
+      npx jest \
+        --config=tests/jest.config.js \
         --runInBand \
         --watchAll=false \
         --passWithNoTests \
-        --silent \
         --coverage \
         --coverageDirectory=coverage \
-        --collectCoverageFrom='["src/**/*.{js,jsx,ts,tsx}",
-        "!src/**/*.d.ts"]' \
         --coverageReporters=cobertura \
         --coverageReporters=html \
         --coverageReporters=text \
         --coverageReporters=lcov
 
-      # Display coverage summary
-      echo "📈 Test Coverage Summary:"
-      if [ -f "coverage/coverage-summary.json" ]; then
-        cat coverage/coverage-summary.json | grep -A 4 '"total"'
-      fi
-
-      echo "✅ Frontend tests completed successfully"
+      echo "✅ Frontend tests completed"
   artifacts:
     paths:
       - client/coverage/
-      - client/test-results/
     reports:
-      junit: client/test-results/*.xml
       coverage_report:
         coverage_format: cobertura
         path: client/coverage/cobertura-coverage.xml
@@ -593,12 +592,6 @@ test_frontend:
     when: always
   rules:
     - if: '$CI_COMMIT_REF_NAME == "dev" || $CI_COMMIT_REF_NAME == "main"'
-  allow_failure: false
-  timeout: 15 minutes
-  retry:
-    max: 1
-    when:
-      - runner_system_failure
 
 # ========================================
 # STAGE 5: ANALYSIS
