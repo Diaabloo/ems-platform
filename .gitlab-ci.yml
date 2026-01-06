@@ -91,7 +91,7 @@ variables:
   image: node:20
   services:
     - name: postgres:15
-      alias: postgres
+      alias: db-server
       variables:
         POSTGRES_USER: "amine"
         POSTGRES_DB: "emsdb"
