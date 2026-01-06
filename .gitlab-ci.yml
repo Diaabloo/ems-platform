@@ -57,7 +57,7 @@ variables:
 
 # Template: Docker Environment
 .docker_template: &docker_template
-  image: docker:24
+  image: docker:latest
   variables:
     DOCKER_TLS_CERTDIR: ""
     DOCKER_BUILDKIT: "1"
@@ -1234,7 +1234,7 @@ notify_success:
 
 cleanup:
   stage: gitops
-  image: docker:24
+  image: docker:latest
   variables:
     DOCKER_TLS_CERTDIR: ""
 
