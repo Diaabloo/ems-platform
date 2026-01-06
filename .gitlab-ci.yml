@@ -3,6 +3,7 @@
 # ========================================
 
 stages:
+  - secrets # Secret Scanning
   - setup  # Dependency installation & caching
   - quality  # Code quality checks (ESLint, Prettier)
   - security  # Security audits & vulnerability scanning
@@ -159,6 +160,61 @@ variables:
       | sh -s -- -b /usr/local/bin
     - echo "✅ Trivy installed successfully"
     - trivy --version
+  tags:
+    - linux
+    - docker
+    - ems-platform
+
+# ========================================
+# STAGE 0: SECRETS
+# Secret scanning with GitLeaks
+# ========================================
+
+gitleaks_scan:
+  stage: secrets
+  image: zricethezav/gitleaks:latest
+  before_script:
+    - echo "🔐 GitLeaks Secret Scanner Setup"
+    - gitleaks version
+  script:
+    - |
+      echo "🔍 Scanning repository for exposed secrets..."
+      mkdir -p artifacts
+
+      # Run GitLeaks scan
+      gitleaks detect \
+        --source . \
+        --report-format json \
+        --report-path artifacts/gitleaks-report.json \
+        --verbose || true
+
+      # Generate human-readable report
+      gitleaks detect \
+        --source . \
+        --report-format sarif \
+        --report-path artifacts/gitleaks-report.sarif || true
+
+      # Display summary
+      echo "📊 GitLeaks Scan Summary:"
+      if [ -f "artifacts/gitleaks-report.json" ]; then
+        echo "✅ Report generated successfully"
+        # Count findings
+        FINDINGS=$(cat artifacts/gitleaks-report.json | grep -o '"Description"' | wc -l)
+        echo "🔍 Found $FINDINGS potential secret(s)"
+      else
+        echo "✅ No secrets detected"
+      fi
+
+      echo "✅ GitLeaks scan completed"
+  artifacts:
+    paths:
+      - artifacts/gitleaks-report.json
+      - artifacts/gitleaks-report.sarif
+    expire_in: 1 week
+    when: always
+  rules:
+    - if: '$CI_COMMIT_REF_NAME == "dev" || $CI_COMMIT_REF_NAME == "main"'
+  allow_failure: true
   tags:
     - linux
     - docker
