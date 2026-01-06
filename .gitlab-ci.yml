@@ -92,11 +92,11 @@ variables:
   services:
     - name: postgres:15
       alias: db-server
-      variables:
-        POSTGRES_USER: "amine"
-        POSTGRES_DB: "emsdb"
-        POSTGRES_PASSWORD: "${POSTGRES_PASSWORD}"
+      command: ["postgres"]
   variables:
+    POSTGRES_USER: "amine"
+    POSTGRES_DB: "emsdb"
+    POSTGRES_PASSWORD: "${POSTGRES_PASSWORD}"
     FF_NETWORK_PER_BUILD: "true"
     DATABASE_URL: "postgresql://amine:${POSTGRES_PASSWORD}@db-server:5432/emsdb?schema=public"
   before_script:
