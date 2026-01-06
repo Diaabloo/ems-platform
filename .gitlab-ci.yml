@@ -98,7 +98,7 @@ variables:
         POSTGRES_PASSWORD: "${POSTGRES_PASSWORD}"
   variables:
     FF_NETWORK_PER_BUILD: "true"
-    DATABASE_URL: "postgresql://amine:${POSTGRES_PASSWORD}@postgres:5432/emsdb?schema=public"
+    DATABASE_URL: "postgresql://amine:${POSTGRES_PASSWORD}@db-server:5432/emsdb?schema=public"
   before_script:
     - apt-get update > /dev/null && apt-get install -y postgresql-client > /dev/null
     - |
@@ -111,7 +111,7 @@ variables:
       done
       
       echo "🕵️ Testing authentication..."
-      PGPASSWORD="${POSTGRES_PASSWORD}" psql -h postgres -U amine -d emsdb -c "SELECT 1;"
+      PGPASSWORD="${POSTGRES_PASSWORD}" psql -h db-server -U amine -d emsdb -c "SELECT 1;"
   tags:
     - linux
     - docker
