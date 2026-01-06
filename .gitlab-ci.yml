@@ -95,22 +95,23 @@ variables:
       variables:
         POSTGRES_USER: "amine"
         POSTGRES_DB: "emsdb"
-        POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+        POSTGRES_PASSWORD: "${POSTGRES_PASSWORD}"
   variables:
     FF_NETWORK_PER_BUILD: "true"
     DATABASE_URL: "postgresql://amine:${POSTGRES_PASSWORD}@postgres:5432/emsdb?schema=public"
   before_script:
     - apt-get update > /dev/null && apt-get install -y postgresql-client > /dev/null
     - |
-      echo "🕵️ Testing connection with psql..."
-      sleep 5
-      PGPASSWORD="${POSTGRES_PASSWORD}" psql -h postgres -U amine -d emsdb -c "SELECT 1;"      echo "🔄 Waiting for PostgreSQL (${POSTGRES_USER}) to be ready..."
+      echo "⏳ Waiting for PostgreSQL to be ready..."
       counter=0
-      until pg_isready -h postgres -U "${POSTGRES_USER}" || [ $counter -eq 30 ]; do
+      until pg_isready -h postgres -U amine || [ $counter -eq 15 ]; do
         sleep 2
         counter=$((counter + 1))
-        echo "⏳ Attempt $counter/30..."
+        echo "Attempt $counter/15..."
       done
+      
+      echo "🕵️ Testing authentication..."
+      PGPASSWORD="${POSTGRES_PASSWORD}" psql -h postgres -U amine -d emsdb -c "SELECT 1;"
   tags:
     - linux
     - docker
