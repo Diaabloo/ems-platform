@@ -546,7 +546,7 @@ test_backend:
 test_frontend:
   stage: test
   <<: *node_template
-  dependencies: [] # On n'attend pas d'artifacts
+  dependencies: [] 
   cache:
     key: "frontend-npm-${CI_COMMIT_REF_SLUG}"
     paths:
@@ -554,33 +554,19 @@ test_frontend:
     policy: pull
   script:
     - |
-      echo "🧪 Running Frontend Tests..."
+      echo "🧪 Running Frontend Tests (Exact same as local)..."
       cd client
 
-      # Sécurité : Si le cache a échoué, on installe vite fait
+      # Réinstallation si node_modules est absent du cache
       if [ ! -d "node_modules" ]; then
-        echo "📦 node_modules missing, installing..."
         npm install --prefer-offline --no-audit
       fi
 
-      mkdir -p test-results coverage
+      # On lance EXACTEMENT ta commande locale avec les options de coverage
+      # Le -- permet de passer des arguments au script npm test
+      npm test -- --coverage --watchAll=false --runInBand --coverageReporters=cobertura --coverageReporters=text
 
-      echo "📊 Executing Jest..."
-      # On utilise 'npx' pour être sûr de trouver Jest même sans le chemin complet
-      # On pointe vers ton fichier de config spécifique
-      npx jest \
-        --config=tests/jest.config.js \
-        --runInBand \
-        --watchAll=false \
-        --passWithNoTests \
-        --coverage \
-        --coverageDirectory=coverage \
-        --coverageReporters=cobertura \
-        --coverageReporters=html \
-        --coverageReporters=text \
-        --coverageReporters=lcov
-
-      echo "✅ Frontend tests completed"
+      echo "✅ Frontend tests completed successfully"
   artifacts:
     paths:
       - client/coverage/
@@ -590,8 +576,6 @@ test_frontend:
         path: client/coverage/cobertura-coverage.xml
     expire_in: 1 week
     when: always
-  rules:
-    - if: '$CI_COMMIT_REF_NAME == "dev" || $CI_COMMIT_REF_NAME == "main"'
 
 # ========================================
 # STAGE 5: ANALYSIS
