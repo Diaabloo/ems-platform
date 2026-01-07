@@ -996,12 +996,10 @@ kube_linter:
   before_script:
     - apk add --no-cache curl tar git openssh-client
     - mkdir -p ~/.ssh && chmod 700 ~/.ssh
-    # Utilisation de echo pour créer le fichier id_rsa proprement
-    - echo "$GITOPS_DEPLOY_KEY" > ~/.ssh/id_rsa
+    # Décodage propre de la clé Base64
+    - echo "$GITOPS_DEPLOY_KEY" | base64 -d > ~/.ssh/id_rsa
     - chmod 600 ~/.ssh/id_rsa
     - ssh-keyscan -H gitlab.com >> ~/.ssh/known_hosts
-    # Test de connexion SSH vers GitLab pour débogage
-    - ssh -T git@gitlab.com || true
     # Installation kube-linter
     - curl -L --retry 5 https://github.com/stackrox/kube-linter/releases/download/v0.6.8/kube-linter-linux.tar.gz -o kube-linter.tar.gz
     - tar -xzf kube-linter.tar.gz
@@ -1016,12 +1014,8 @@ kube_linter:
       kube-linter lint gitops-infra/k8s/base/ --format plain || true
   artifacts:
     when: always
-    paths:
-      - artifacts/
-  tags:
-    - linux
-    - docker
-    - ems-platform
+    paths: [artifacts/]
+  tags: [linux, docker, ems-platform]
 
 kubeconform_validate:
   stage: infrastructure
@@ -1031,10 +1025,9 @@ kubeconform_validate:
   before_script:
     - apk add --no-cache curl tar git openssh-client
     - mkdir -p ~/.ssh && chmod 700 ~/.ssh
-    - echo "$GITOPS_DEPLOY_KEY" > ~/.ssh/id_rsa
+    - echo "$GITOPS_DEPLOY_KEY" | base64 -d > ~/.ssh/id_rsa
     - chmod 600 ~/.ssh/id_rsa
     - ssh-keyscan -H gitlab.com >> ~/.ssh/known_hosts
-    # Installation kubeconform
     - curl -L --retry 5 https://github.com/yannh/kubeconform/releases/download/v0.6.4/kubeconform-linux-amd64.tar.gz -o kubeconform.tar.gz
     - tar -xzf kubeconform.tar.gz
     - mv kubeconform /usr/local/bin/
@@ -1044,10 +1037,7 @@ kubeconform_validate:
       git clone $GITOPS_REPO gitops-infra
       echo "🔍 Running kubeconform..."
       kubeconform -schema-location default -ignore-missing-schemas -summary gitops-infra/k8s/ || true
-  tags:
-    - linux
-    - docker
-    - ems-platform
+  tags: [linux, docker, ems-platform]
 
 # ========================================
 # STAGE 9: GITOPS
