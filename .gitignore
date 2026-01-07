@@ -1,0 +1,69 @@
+# =================================================================
+# EMS PLATFORM - GITIGNORE
+# =================================================================
+
+# --- 1. SÉCURITÉ (CRITIQUE) ---
+.env
+.env.*
+!.env.example
+secrets/
+*.pem
+*.key
+*.cert
+host.docker.internal.crt
+
+# --- 2. DÉPENDANCES (NODE.JS) ---
+node_modules/
+.npm
+.eslintcache
+.prettiercache
+package-lock.json.log
+
+# --- 3. BUILDS ET ARTÉFACTS ---
+dist/
+build/
+.next/
+out/
+*.so
+*.exe
+*.dll
+
+# --- 4. PERSISTANCE ET DONNÉES LOCALES ---
+postgres-data/
+*.db
+*.sqlite
+/db/employeedb_dump.sql
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# --- 5. INFRASTRUCTURE AS CODE (TERRAFORM & ANSIBLE) ---
+.terraform/
+*.tfstate
+*.tfstate.backup
+*.tfplan
+*.tfvars
+*.tfvars.json
+.terraform.lock.hcl
+*.retry
+
+# --- 6. TESTS ET QUALITÉ ---
+coverage/
+.nyc_output/
+*.lcov
+.scannerwork/
+artifacts/
+
+# --- 7. KUBERNETES & RUNNERS ---
+.kube/
+kubeconfig
+.gitlab-runner/
+
+# --- 8. SYSTÈME ET IDE ---
+.vscode/*
+!.vscode/extensions.json
+!.vscode/settings.json
+.idea/
+.DS_Store
+Thumbs.db

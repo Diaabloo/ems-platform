@@ -1,58 +1,62 @@
-"use client"
+"use client";
 
-import type React from "react"
-import { useState, useEffect } from "react"
-import { useStore, type Department } from "@/lib/store"
-import { X } from "lucide-react"
-import { toast } from "sonner"
+import type React from "react";
+import { useState, useEffect } from "react";
+import { useStore, type Department } from "@/lib/store";
+import { X } from "lucide-react";
+import { toast } from "sonner";
 
 interface DepartmentModalProps {
-  isOpen: boolean
-  onClose: () => void
-  department: Department | null
+  isOpen: boolean;
+  onClose: () => void;
+  department: Department | null;
 }
 
-export function DepartmentModal({ isOpen, onClose, department }: DepartmentModalProps) {
-  const { addDepartment, updateDepartment } = useStore()
+export function DepartmentModal({
+  isOpen,
+  onClose,
+  department,
+}: DepartmentModalProps) {
+  const { addDepartment, updateDepartment } = useStore();
 
   const [formData, setFormData] = useState({
     name: "",
     description: "",
-  })
+  });
 
   useEffect(() => {
     if (department) {
       setFormData({
         name: department.name,
         description: department.description,
-      })
+      });
     } else {
       setFormData({
         name: "",
         description: "",
-      })
+      });
     }
-  }, [department, isOpen])
+  }, [department, isOpen]);
 
   const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault()
+    e.preventDefault();
 
     if (department) {
-      updateDepartment(department.id, formData)
+      updateDepartment(department.id, formData);
       toast.success("Department updated successfully", {
         description: `${formData.name} has been updated.`,
-      })
+      });
     } else {
-      addDepartment(formData)
+      addDepartment(formData);
       toast.success("Department added successfully", {
         description: `${formData.name} has been added to the system.`,
-      })
+      });
     }
 
-    onClose()
-  }
+    onClose();
+  };
 
-  if (!isOpen) return null
+  if (!isOpen) return null;
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-background/80 backdrop-blur-sm">
@@ -79,7 +83,9 @@ export function DepartmentModal({ isOpen, onClose, department }: DepartmentModal
               type="text"
               required
               value={formData.name}
-              onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+              onChange={(e) =>
+                setFormData({ ...formData, name: e.target.value })
+              }
               className="h-11 w-full rounded-lg border border-input bg-background px-4 text-sm text-foreground placeholder:text-muted-foreground focus:border-ring focus:outline-none focus:ring-2 focus:ring-ring"
               placeholder="Engineering"
             />
@@ -93,7 +99,9 @@ export function DepartmentModal({ isOpen, onClose, department }: DepartmentModal
             <textarea
               required
               value={formData.description}
-              onChange={(e) => setFormData({ ...formData, description: e.target.value })}
+              onChange={(e) =>
+                setFormData({ ...formData, description: e.target.value })
+              }
               rows={4}
               className="w-full rounded-lg border border-input bg-background px-4 py-3 text-sm text-foreground placeholder:text-muted-foreground focus:border-ring focus:outline-none focus:ring-2 focus:ring-ring"
               placeholder="Brief description of the department..."
@@ -119,5 +127,5 @@ export function DepartmentModal({ isOpen, onClose, department }: DepartmentModal
         </form>
       </div>
     </div>
-  )
+  );
 }

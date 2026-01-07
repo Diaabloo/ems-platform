@@ -1,27 +1,33 @@
-"use client"
+"use client";
 
-import Link from "next/link"
-import { usePathname } from "next/navigation"
-import { LayoutDashboard, Users, Building2, Settings, LogOut } from "lucide-react"
-import { useStore } from "@/lib/store"
-import { useRouter } from "next/navigation"
+import Link from "next/link";
+import { usePathname } from "next/navigation";
+import {
+  LayoutDashboard,
+  Users,
+  Building2,
+  Settings,
+  LogOut,
+} from "lucide-react";
+import { useStore } from "@/lib/store";
+import { useRouter } from "next/navigation";
 
 const navigation = [
   { name: "Dashboard", href: "/dashboard", icon: LayoutDashboard },
   { name: "Employees", href: "/employees", icon: Users },
   { name: "Departments", href: "/departments", icon: Building2 },
   { name: "Settings", href: "/settings", icon: Settings },
-]
+];
 
 export function Sidebar() {
-  const pathname = usePathname()
-  const router = useRouter()
-  const logout = useStore((state) => state.logout)
+  const pathname = usePathname();
+  const router = useRouter();
+  const logout = useStore((state) => state.logout);
 
   const handleLogout = () => {
-    logout()
-    router.push("/login")
-  }
+    logout();
+    router.push("/login");
+  };
 
   return (
     <div className="flex h-screen w-64 flex-col border-r border-border bg-card">
@@ -38,7 +44,7 @@ export function Sidebar() {
       {/* Navigation */}
       <nav className="flex-1 space-y-1 px-3 py-4">
         {navigation.map((item) => {
-          const isActive = pathname === item.href
+          const isActive = pathname === item.href;
           return (
             <Link
               key={item.name}
@@ -52,7 +58,7 @@ export function Sidebar() {
               <item.icon className="h-5 w-5" />
               {item.name}
             </Link>
-          )
+          );
         })}
       </nav>
 
@@ -67,5 +73,5 @@ export function Sidebar() {
         </button>
       </div>
     </div>
-  )
+  );
 }

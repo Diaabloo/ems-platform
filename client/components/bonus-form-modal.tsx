@@ -1,21 +1,28 @@
-"use client"
+"use client";
 
-import type React from "react"
-import { useState, useEffect } from "react"
-import { useStore, type Bonus } from "@/lib/store"
-import { X } from "lucide-react"
-import { toast } from "sonner"
+import type React from "react";
+import { useState, useEffect } from "react";
+import { useStore, type Bonus } from "@/lib/store";
+import { X } from "lucide-react";
+import { toast } from "sonner";
 
 interface BonusFormModalProps {
-  isOpen: boolean
-  onClose: () => void
-  employeeId: string
-  employeeName: string
-  bonus?: Bonus | null
+  isOpen: boolean;
+  onClose: () => void;
+  // employeeId: string;
+  employeeId: number;
+  employeeName: string;
+  bonus?: Bonus | null;
 }
 
-export function BonusFormModal({ isOpen, onClose, employeeId, employeeName, bonus }: BonusFormModalProps) {
-  const { addBonus, updateBonus } = useStore()
+export function BonusFormModal({
+  isOpen,
+  onClose,
+  employeeId,
+  employeeName,
+  bonus,
+}: BonusFormModalProps) {
+  const { addBonus, updateBonus } = useStore();
 
   const [formData, setFormData] = useState({
     date: "",
@@ -23,7 +30,7 @@ export function BonusFormModal({ isOpen, onClose, employeeId, employeeName, bonu
     type: "Performance" as Bonus["type"],
     reason: "",
     status: "Pending" as Bonus["status"],
-  })
+  });
 
   useEffect(() => {
     if (bonus) {
@@ -33,48 +40,52 @@ export function BonusFormModal({ isOpen, onClose, employeeId, employeeName, bonu
         type: bonus.type,
         reason: bonus.reason,
         status: bonus.status,
-      })
+      });
     } else {
-      const now = new Date()
+      const now = new Date();
       setFormData({
         date: now.toISOString().split("T")[0],
         amount: 0,
         type: "Performance",
         reason: "",
         status: "Pending",
-      })
+      });
     }
-  }, [bonus, isOpen])
+  }, [bonus, isOpen]);
 
-  if (!isOpen) return null
+  if (!isOpen) return null;
 
   const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault()
+    e.preventDefault();
 
     if (bonus) {
-      updateBonus(bonus.id, formData)
+      updateBonus(bonus.id, formData);
       toast.success("Bonus updated successfully", {
         description: `Bonus for ${employeeName} has been updated.`,
-      })
+      });
     } else {
       addBonus({
         ...formData,
         employeeId,
-      })
+      });
       toast.success("Bonus added successfully", {
-        description: `Bonus of $${formData.amount.toFixed(2)} has been recorded.`,
-      })
+        description: `Bonus of $${formData.amount.toFixed(
+          2,
+        )} has been recorded.`,
+      });
     }
 
-    onClose()
-  }
+    onClose();
+  };
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
       <div className="w-full max-w-md rounded-xl border border-border bg-card shadow-lg">
         <div className="flex items-center justify-between border-b border-border p-6">
           <div>
-            <h2 className="text-xl font-semibold text-foreground">{bonus ? "Edit Bonus" : "Add Bonus"}</h2>
+            <h2 className="text-xl font-semibold text-foreground">
+              {bonus ? "Edit Bonus" : "Add Bonus"}
+            </h2>
             <p className="mt-1 text-sm text-muted-foreground">{employeeName}</p>
           </div>
           <button
@@ -88,34 +99,52 @@ export function BonusFormModal({ isOpen, onClose, employeeId, employeeName, bonu
         <form onSubmit={handleSubmit} className="p-6">
           <div className="space-y-4">
             <div>
-              <label className="mb-2 block text-sm font-medium text-foreground">Date</label>
+              <label className="mb-2 block text-sm font-medium text-foreground">
+                Date
+              </label>
               <input
                 type="date"
                 value={formData.date}
-                onChange={(e) => setFormData({ ...formData, date: e.target.value })}
+                onChange={(e) =>
+                  setFormData({ ...formData, date: e.target.value })
+                }
                 required
                 className="h-11 w-full rounded-lg border border-input bg-background px-4 text-sm text-foreground focus:border-ring focus:outline-none focus:ring-2 focus:ring-ring"
               />
             </div>
 
             <div>
-              <label className="mb-2 block text-sm font-medium text-foreground">Amount ($)</label>
+              <label className="mb-2 block text-sm font-medium text-foreground">
+                Amount ($)
+              </label>
               <input
                 type="number"
                 min="0"
                 step="0.01"
                 value={formData.amount}
-                onChange={(e) => setFormData({ ...formData, amount: Number.parseFloat(e.target.value) })}
+                onChange={(e) =>
+                  setFormData({
+                    ...formData,
+                    amount: Number.parseFloat(e.target.value),
+                  })
+                }
                 required
                 className="h-11 w-full rounded-lg border border-input bg-background px-4 text-sm text-foreground focus:border-ring focus:outline-none focus:ring-2 focus:ring-ring"
               />
             </div>
 
             <div>
-              <label className="mb-2 block text-sm font-medium text-foreground">Type</label>
+              <label className="mb-2 block text-sm font-medium text-foreground">
+                Type
+              </label>
               <select
                 value={formData.type}
-                onChange={(e) => setFormData({ ...formData, type: e.target.value as Bonus["type"] })}
+                onChange={(e) =>
+                  setFormData({
+                    ...formData,
+                    type: e.target.value as Bonus["type"],
+                  })
+                }
                 className="h-11 w-full rounded-lg border border-input bg-background px-4 text-sm text-foreground focus:border-ring focus:outline-none focus:ring-2 focus:ring-ring"
               >
                 <option value="Performance">Performance</option>
@@ -126,10 +155,14 @@ export function BonusFormModal({ isOpen, onClose, employeeId, employeeName, bonu
             </div>
 
             <div>
-              <label className="mb-2 block text-sm font-medium text-foreground">Reason</label>
+              <label className="mb-2 block text-sm font-medium text-foreground">
+                Reason
+              </label>
               <textarea
                 value={formData.reason}
-                onChange={(e) => setFormData({ ...formData, reason: e.target.value })}
+                onChange={(e) =>
+                  setFormData({ ...formData, reason: e.target.value })
+                }
                 rows={3}
                 required
                 className="w-full rounded-lg border border-input bg-background px-4 py-3 text-sm text-foreground focus:border-ring focus:outline-none focus:ring-2 focus:ring-ring"
@@ -138,10 +171,17 @@ export function BonusFormModal({ isOpen, onClose, employeeId, employeeName, bonu
             </div>
 
             <div>
-              <label className="mb-2 block text-sm font-medium text-foreground">Status</label>
+              <label className="mb-2 block text-sm font-medium text-foreground">
+                Status
+              </label>
               <select
                 value={formData.status}
-                onChange={(e) => setFormData({ ...formData, status: e.target.value as Bonus["status"] })}
+                onChange={(e) =>
+                  setFormData({
+                    ...formData,
+                    status: e.target.value as Bonus["status"],
+                  })
+                }
                 className="h-11 w-full rounded-lg border border-input bg-background px-4 text-sm text-foreground focus:border-ring focus:outline-none focus:ring-2 focus:ring-ring"
               >
                 <option value="Pending">Pending</option>
@@ -168,5 +208,5 @@ export function BonusFormModal({ isOpen, onClose, employeeId, employeeName, bonu
         </form>
       </div>
     </div>
-  )
+  );
 }

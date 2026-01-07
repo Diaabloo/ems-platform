@@ -1,21 +1,28 @@
-"use client"
+"use client";
 
-import type React from "react"
-import { useState, useEffect } from "react"
-import { X } from "lucide-react"
-import { useStore, type Leave } from "@/lib/store"
-import { toast } from "sonner"
+import type React from "react";
+import { useState, useEffect } from "react";
+import { X } from "lucide-react";
+import { useStore, type Leave } from "@/lib/store";
+import { toast } from "sonner";
 
 interface LeaveFormModalProps {
-  isOpen: boolean
-  onClose: () => void
-  employeeId: string
-  employeeName: string
-  leave?: Leave | null
+  isOpen: boolean;
+  onClose: () => void;
+  // employeeId: string;
+  employeeId: number;
+  employeeName: string;
+  leave?: Leave | null;
 }
 
-export function LeaveFormModal({ isOpen, onClose, employeeId, employeeName, leave }: LeaveFormModalProps) {
-  const { addLeave, updateLeave } = useStore()
+export function LeaveFormModal({
+  isOpen,
+  onClose,
+  employeeId,
+  employeeName,
+  leave,
+}: LeaveFormModalProps) {
+  const { addLeave, updateLeave } = useStore();
 
   const [formData, setFormData] = useState({
     startDate: "",
@@ -23,7 +30,7 @@ export function LeaveFormModal({ isOpen, onClose, employeeId, employeeName, leav
     type: "Vacation" as Leave["type"],
     status: "Pending" as Leave["status"],
     reason: "",
-  })
+  });
 
   useEffect(() => {
     if (leave) {
@@ -33,7 +40,7 @@ export function LeaveFormModal({ isOpen, onClose, employeeId, employeeName, leav
         type: leave.type,
         status: leave.status,
         reason: leave.reason || "",
-      })
+      });
     } else {
       setFormData({
         startDate: "",
@@ -41,39 +48,41 @@ export function LeaveFormModal({ isOpen, onClose, employeeId, employeeName, leav
         type: "Vacation",
         status: "Pending",
         reason: "",
-      })
+      });
     }
-  }, [leave, isOpen])
+  }, [leave, isOpen]);
 
   const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault()
+    e.preventDefault();
 
     if (leave) {
-      updateLeave(leave.id, formData)
+      updateLeave(leave.id, formData);
       toast.success("Leave updated successfully", {
         description: `Leave for ${employeeName} has been updated.`,
-      })
+      });
     } else {
       addLeave({
         employeeId,
         ...formData,
-      })
+      });
       toast.success("Leave added successfully", {
         description: `Leave for ${employeeName} has been recorded.`,
-      })
+      });
     }
 
-    onClose()
-  }
+    onClose();
+  };
 
-  if (!isOpen) return null
+  if (!isOpen) return null;
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
       <div className="w-full max-w-md rounded-xl border border-border bg-card p-6">
         <div className="mb-4 flex items-center justify-between">
           <div>
-            <h2 className="text-xl font-bold text-foreground">{leave ? "Edit Leave" : "Add Leave"}</h2>
+            <h2 className="text-xl font-bold text-foreground">
+              {leave ? "Edit Leave" : "Add Leave"}
+            </h2>
             <p className="text-sm text-muted-foreground">{employeeName}</p>
           </div>
           <button
@@ -86,32 +95,47 @@ export function LeaveFormModal({ isOpen, onClose, employeeId, employeeName, leav
 
         <form onSubmit={handleSubmit} className="space-y-4">
           <div>
-            <label className="mb-1.5 block text-sm font-medium text-foreground">Start Date</label>
+            <label className="mb-1.5 block text-sm font-medium text-foreground">
+              Start Date
+            </label>
             <input
               type="date"
               required
               value={formData.startDate}
-              onChange={(e) => setFormData({ ...formData, startDate: e.target.value })}
+              onChange={(e) =>
+                setFormData({ ...formData, startDate: e.target.value })
+              }
               className="h-10 w-full rounded-lg border border-input bg-background px-3 text-sm text-foreground focus:border-ring focus:outline-none focus:ring-2 focus:ring-ring"
             />
           </div>
 
           <div>
-            <label className="mb-1.5 block text-sm font-medium text-foreground">End Date</label>
+            <label className="mb-1.5 block text-sm font-medium text-foreground">
+              End Date
+            </label>
             <input
               type="date"
               required
               value={formData.endDate}
-              onChange={(e) => setFormData({ ...formData, endDate: e.target.value })}
+              onChange={(e) =>
+                setFormData({ ...formData, endDate: e.target.value })
+              }
               className="h-10 w-full rounded-lg border border-input bg-background px-3 text-sm text-foreground focus:border-ring focus:outline-none focus:ring-2 focus:ring-ring"
             />
           </div>
 
           <div>
-            <label className="mb-1.5 block text-sm font-medium text-foreground">Type</label>
+            <label className="mb-1.5 block text-sm font-medium text-foreground">
+              Type
+            </label>
             <select
               value={formData.type}
-              onChange={(e) => setFormData({ ...formData, type: e.target.value as Leave["type"] })}
+              onChange={(e) =>
+                setFormData({
+                  ...formData,
+                  type: e.target.value as Leave["type"],
+                })
+              }
               className="h-10 w-full rounded-lg border border-input bg-background px-3 text-sm text-foreground focus:border-ring focus:outline-none focus:ring-2 focus:ring-ring"
             >
               <option value="Vacation">Vacation</option>
@@ -123,10 +147,17 @@ export function LeaveFormModal({ isOpen, onClose, employeeId, employeeName, leav
           </div>
 
           <div>
-            <label className="mb-1.5 block text-sm font-medium text-foreground">Status</label>
+            <label className="mb-1.5 block text-sm font-medium text-foreground">
+              Status
+            </label>
             <select
               value={formData.status}
-              onChange={(e) => setFormData({ ...formData, status: e.target.value as Leave["status"] })}
+              onChange={(e) =>
+                setFormData({
+                  ...formData,
+                  status: e.target.value as Leave["status"],
+                })
+              }
               className="h-10 w-full rounded-lg border border-input bg-background px-3 text-sm text-foreground focus:border-ring focus:outline-none focus:ring-2 focus:ring-ring"
             >
               <option value="Pending">Pending</option>
@@ -136,10 +167,14 @@ export function LeaveFormModal({ isOpen, onClose, employeeId, employeeName, leav
           </div>
 
           <div>
-            <label className="mb-1.5 block text-sm font-medium text-foreground">Reason (Optional)</label>
+            <label className="mb-1.5 block text-sm font-medium text-foreground">
+              Reason (Optional)
+            </label>
             <textarea
               value={formData.reason}
-              onChange={(e) => setFormData({ ...formData, reason: e.target.value })}
+              onChange={(e) =>
+                setFormData({ ...formData, reason: e.target.value })
+              }
               rows={3}
               className="w-full rounded-lg border border-input bg-background px-3 py-2 text-sm text-foreground focus:border-ring focus:outline-none focus:ring-2 focus:ring-ring"
               placeholder="Enter reason for leave..."
@@ -164,5 +199,5 @@ export function LeaveFormModal({ isOpen, onClose, employeeId, employeeName, leav
         </form>
       </div>
     </div>
-  )
+  );
 }

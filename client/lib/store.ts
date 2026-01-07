@@ -1,131 +1,156 @@
-"use client"
+"use client";
 
-import { create } from "zustand"
-import { persist } from "zustand/middleware"
+import { create } from "zustand";
+import { persist } from "zustand/middleware";
+
+const getApiBase = () => {
+  return process.env.NEXT_PUBLIC_API_URL || "/api";
+};
 
 // Types
-export interface Absence {
-  id: string
-  employeeId: number
-  date: string
-  type: "Sick Leave" | "Vacation" | "Unjustified"
-  duration: number // in days
-  status: "Approved" | "Pending"
-  reason?: string
-}
+export type Absence = {
+  id: string;
+  employeeId: number;
+  date: string;
+  type: "Sick Leave" | "Vacation" | "Unjustified";
+  duration: number; // in days
+  status: "Approved" | "Pending";
+  reason?: string;
+};
 
 export interface Leave {
-  id: string
-  employeeId: number
-  startDate: string
-  endDate: string
-  type: "Vacation" | "Sick Leave" | "Maternity/Paternity" | "Unpaid Leave" | "Other"
-  status: "Approved" | "Pending" | "Rejected"
-  reason?: string
+  id: string;
+  employeeId: number;
+  startDate: string;
+  endDate: string;
+  type:
+    | "Vacation"
+    | "Sick Leave"
+    | "Maternity/Paternity"
+    | "Unpaid Leave"
+    | "Other";
+  status: "Approved" | "Pending" | "Rejected";
+  reason?: string;
 }
 
 export interface Payment {
-  id: string
-  employeeId: number
-  date: string
-  amount: number
-  period: string // e.g., "January 2025"
-  status: "Paid" | "Pending" | "Processing"
-  method: "Bank Transfer" | "Check" | "Cash"
+  id: string;
+  employeeId: number;
+  date: string;
+  amount: number;
+  period: string; // e.g., "January 2025"
+  status: "Paid" | "Pending" | "Processing";
+  method: "Bank Transfer" | "Check" | "Cash";
 }
 
 export interface Bonus {
-  id: string
-  employeeId: number
-  date: string
-  amount: number
-  type: "Performance" | "Annual" | "Project" | "Holiday"
-  reason: string
-  status: "Paid" | "Pending"
+  id: string;
+  employeeId: number;
+  date: string;
+  amount: number;
+  type: "Performance" | "Annual" | "Project" | "Holiday";
+  reason: string;
+  status: "Paid" | "Pending";
 }
 
 export interface Employee {
-  id: number
-  first_name?: string
-  last_name?: string
-  email: string
-  phone: string
-  department: string
-  role: string
-  status: "Active" | "Inactive"
-  hireDate: string
-  salary?: number
+  id: number;
+  fullName: string;
+  first_name?: string;
+  last_name?: string;
+  email: string;
+  phone: string;
+  department: string;
+  role: string;
+  status: "Active" | "Inactive";
+  hireDate: string;
+  salary?: number;
+  departmentColor?: string;
 }
 
 export interface Department {
-  id: string
-  name: string
-  description: string
-  employeeCount: number
-  color?: string
+  id: string;
+  name: string;
+  description: string;
+  employeeCount: number;
+  color?: string;
 }
 
 export interface User {
-  id: string
-  fullName: string
-  email: string
-  token: string
+  id: string;
+  fullName: string;
+  email: string;
+  token: string;
 }
 
 interface AppState {
   // Auth
-  user: User | null
-  isAuthenticated: boolean
-  login: (email: string, token: string, id: string) => boolean
-  signup: () => boolean
-  logout: () => void
+  user: User | null;
+  isAuthenticated: boolean;
+  login: (email: string, token: string, id: string) => boolean;
+  signup: () => boolean;
+  logout: () => void;
 
   // Theme
-  theme: "light" | "dark"
-  toggleTheme: () => void
+  theme: "light" | "dark";
+  toggleTheme: () => void;
 
   // Employees
-  employees: Employee[]
-  employeesPagination: { page: number; limit: number; total: number; totalPages: number }
-  setEmployees: (employees: Employee[], pagination: { page: number; limit: number; total: number; totalPages: number }) => void
-  addEmployee: (employee: Omit<Employee, "id">) => void
-  updateEmployee: (id: number, employee: Partial<Employee>) => void
-  deleteEmployee: (id: number) => void
-  getEmployeeById: (id: number) => Employee | undefined
+  employees: Employee[];
+  employeesPagination: {
+    page: number;
+    limit: number;
+    total: number;
+    totalPages: number;
+  };
+  setEmployees: (
+    employees: Employee[],
+    pagination: {
+      page: number;
+      limit: number;
+      total: number;
+      totalPages: number;
+    },
+  ) => void;
+  addEmployee: (employee: Omit<Employee, "id">) => void;
+  updateEmployee: (id: number, employee: Partial<Employee>) => void;
+  deleteEmployee: (id: number) => void;
+  getEmployeeById: (id: number) => Employee | undefined;
 
   // Departments
-  departments: Department[]
-  fetchDepartments: () => Promise<void>
-  addDepartment: (dept: Omit<Department, "id" | "employeeCount"> & { color?: string }) => Promise<void>
-  updateDepartment: (id: string, updates: Partial<Department>) => Promise<void>
-  deleteDepartment: (id: string) => Promise<void>
+  departments: Department[];
+  fetchDepartments: () => Promise<void>;
+  addDepartment: (
+    dept: Omit<Department, "id" | "employeeCount"> & { color?: string },
+  ) => Promise<void>;
+  updateDepartment: (id: string, updates: Partial<Department>) => Promise<void>;
+  deleteDepartment: (id: string) => Promise<void>;
 
+  absences: Absence[];
+  addAbsence: (absence: Omit<Absence, "id">) => void;
+  updateAbsence: (id: string, absence: Partial<Absence>) => void;
+  deleteAbsence: (id: string) => void;
+  getAbsencesByEmployeeId: (employeeId: number) => Absence[];
+  getMonthlyAbsencesCount: (employeeId: number) => number;
 
-  absences: Absence[]
-  addAbsence: (absence: Omit<Absence, "id">) => void
-  updateAbsence: (id: string, absence: Partial<Absence>) => void
-  deleteAbsence: (id: string) => void
-  getAbsencesByEmployeeId: (employeeId: number) => Absence[]
-  getMonthlyAbsencesCount: (employeeId: number) => number
+  payments: Payment[];
+  addPayment: (payment: Omit<Payment, "id">) => void;
+  updatePayment: (id: string, payment: Partial<Payment>) => void;
+  deletePayment: (id: string) => void;
+  getPaymentsByEmployeeId: (employeeId: number) => Payment[];
 
-  payments: Payment[]
-  addPayment: (payment: Omit<Payment, "id">) => void
-  updatePayment: (id: string, payment: Partial<Payment>) => void
-  deletePayment: (id: string) => void
-  getPaymentsByEmployeeId: (employeeId: number) => Payment[]
+  bonuses: Bonus[];
+  addBonus: (bonus: Omit<Bonus, "id">) => void;
+  updateBonus: (id: string, bonus: Partial<Bonus>) => void;
+  deleteBonus: (id: string) => void;
+  getBonusesByEmployeeId: (employeeId: number) => Bonus[];
 
-  bonuses: Bonus[]
-  addBonus: (bonus: Omit<Bonus, "id">) => void
-  updateBonus: (id: string, bonus: Partial<Bonus>) => void
-  deleteBonus: (id: string) => void
-  getBonusesByEmployeeId: (employeeId: number) => Bonus[]
-
-  leaves: Leave[]
-  addLeave: (leave: Omit<Leave, "id">) => void
-  updateLeave: (id: string, leave: Partial<Leave>) => void
-  deleteLeave: (id: string) => void
-  getLeavesByEmployeeId: (employeeId: number) => Leave[]
-  hasActiveLeave: (employeeId: number) => boolean
+  leaves: Leave[];
+  addLeave: (leave: Omit<Leave, "id">) => void;
+  updateLeave: (id: string, leave: Partial<Leave>) => void;
+  deleteLeave: (id: string) => void;
+  getLeavesByEmployeeId: (employeeId: number) => Leave[];
+  hasActiveLeave: (employeeId: number) => boolean;
 }
 
 // Mock initial data
@@ -178,7 +203,7 @@ const initialAbsences: Absence[] = [
     duration: 1,
     status: "Approved",
   },
-]
+];
 
 const initialPayments: Payment[] = [
   {
@@ -226,7 +251,7 @@ const initialPayments: Payment[] = [
     status: "Paid",
     method: "Bank Transfer",
   },
-]
+];
 
 const initialBonuses: Bonus[] = [
   {
@@ -256,7 +281,7 @@ const initialBonuses: Bonus[] = [
     reason: "Outstanding code quality and mentorship",
     status: "Pending",
   },
-]
+];
 
 const initialLeaves: Leave[] = [
   {
@@ -277,7 +302,7 @@ const initialLeaves: Leave[] = [
     status: "Approved",
     reason: "Medical recovery",
   },
-]
+];
 
 export const useStore = create<AppState>()(
   persist(
@@ -287,65 +312,77 @@ export const useStore = create<AppState>()(
       isAuthenticated: false,
 
       login: (email: string, token: string, id: string) => {
-        console.log("Login called with:", { email, token, id })
+        console.log("Login called with:", { email, token, id });
         try {
           if (!email || !token || !id) {
-            console.error("Invalid login arguments:", { email, token, id })
-            return false
+            console.error("Invalid login arguments:", { email, token, id });
+            return false;
           }
           set({
             user: { id, fullName: "Admin User", email, token },
             isAuthenticated: true,
-          })
-          console.log("Login successful, state updated")
-          return true
+          });
+          console.log("Login successful, state updated");
+          return true;
         } catch (err) {
-          console.error("Login error:", err)
-          return false
+          console.error("Login error:", err);
+          return false;
         }
       },
 
       signup: () => {
-        return false
+        return false;
       },
 
       logout: () => {
-        set({ user: null, isAuthenticated: false })
-        localStorage.removeItem("token")
+        set({ user: null, isAuthenticated: false });
+        localStorage.removeItem("token");
       },
 
       // Theme
       theme: "dark",
       toggleTheme: () => {
-        const newTheme = get().theme === "dark" ? "light" : "dark"
-        set({ theme: newTheme })
-        document.documentElement.classList.toggle("light", newTheme === "light")
+        const newTheme = get().theme === "dark" ? "light" : "dark";
+        set({ theme: newTheme });
+        document.documentElement.classList.toggle(
+          "light",
+          newTheme === "light",
+        );
       },
 
       // Employees
       employees: initialEmployees,
-      employeesPagination: { page: 1, limit: 10, total: initialEmployees.length, totalPages: 1 },
+      employeesPagination: {
+        page: 1,
+        limit: 10,
+        total: initialEmployees.length,
+        totalPages: 1,
+      },
       setEmployees: (employees, pagination) => {
-        set({ employees, employeesPagination: pagination })
+        set({ employees, employeesPagination: pagination });
       },
       addEmployee: (employee) => {
         const newEmployee = {
           ...employee,
           id: Date.now(),
-        }
+        };
         set((state) => ({
           employees: [...state.employees, newEmployee],
           employeesPagination: {
             ...state.employeesPagination,
             total: state.employees.length + 1,
-            totalPages: Math.ceil((state.employees.length + 1) / state.employeesPagination.limit),
+            totalPages: Math.ceil(
+              (state.employees.length + 1) / state.employeesPagination.limit,
+            ),
           },
-        }))
+        }));
       },
       updateEmployee: (id, updates) => {
         set((state) => ({
-          employees: state.employees.map((emp) => (emp.id === id ? { ...emp, ...updates } : emp)),
-        }))
+          employees: state.employees.map((emp) =>
+            emp.id === id ? { ...emp, ...updates } : emp,
+          ),
+        }));
       },
       deleteEmployee: (id) => {
         set((state) => ({
@@ -353,81 +390,96 @@ export const useStore = create<AppState>()(
           employeesPagination: {
             ...state.employeesPagination,
             total: state.employees.length - 1,
-            totalPages: Math.ceil((state.employees.length - 1) / state.employeesPagination.limit),
+            totalPages: Math.ceil(
+              (state.employees.length - 1) / state.employeesPagination.limit,
+            ),
           },
-        }))
+        }));
       },
       getEmployeeById: (id) => {
-        return get().employees.find((emp) => emp.id === id)
+        return get().employees.find((emp) => emp.id === id);
       },
 
       // Departments
       departments: initialDepartments,
 
       fetchDepartments: async () => {
-        const token = localStorage.getItem("token")
+        const token = localStorage.getItem("token");
         try {
-          const res = await fetch("http://localhost:5000/api/departments", {
-            headers: { Authorization: `Bearer ${token || ""}` }
-          })
-          if (!res.ok) throw new Error("Failed")
-          const json = await res.json()
+          const res = await fetch(`${getApiBase()}/departments`, {
+            headers: { Authorization: `Bearer ${token || ""}` },
+          });
+          if (!res.ok) throw new Error("Failed");
+          const json = await res.json();
           const formatted: Department[] = json.data.map((d: any) => ({
             id: d.id,
             name: d.name,
             description: d.description,
             employeeCount: d.employeeCount || 0,
-            color: d.color
-          }))
-          set({ departments: formatted })
+            color: d.color,
+          }));
+          set({ departments: formatted });
         } catch (err) {
-          console.error("Fetch departments error:", err)
+          console.error("Fetch departments error:", err);
         }
       },
 
       addDepartment: async (dept) => {
-        const token = localStorage.getItem("token")
-        const res = await fetch("http://localhost:5000/api/departments", {
+        const token = localStorage.getItem("token");
+
+        // fetch("http://localhost:5000/api/departments", {
+        const res = await fetch(`${getApiBase()}/departments`, {
           method: "POST",
           headers: {
             "Content-Type": "application/json",
-            Authorization: `Bearer ${token || ""}`
+            Authorization: `Bearer ${token || ""}`,
           },
-          body: JSON.stringify(dept)
-        })
+          body: JSON.stringify(dept),
+        });
         if (res.ok) {
-          const json = await res.json()
-          set(state => ({
-            departments: [...state.departments, { ...dept, id: json.data.id, employeeCount: 0 }]
-          }))
+          const json = await res.json();
+          set((state) => ({
+            departments: [
+              ...state.departments,
+              { ...dept, id: json.data.id, employeeCount: 0 },
+            ],
+          }));
         }
       },
 
       updateDepartment: async (id, updates) => {
-        const token = localStorage.getItem("token")
-        const res = await fetch(`http://localhost:5000/api/departments/${id}`, {
+        const token = localStorage.getItem("token");
+
+        // `http://localhost:5000/api/departments/${id}`
+        const res = await fetch(`${getApiBase()}/departments/${id}`, {
           method: "PUT",
           headers: {
             "Content-Type": "application/json",
-            Authorization: `Bearer ${token || ""}`
+            Authorization: `Bearer ${token || ""}`,
           },
-          body: JSON.stringify(updates)
-        })
+          body: JSON.stringify(updates),
+        });
         if (res.ok) {
-          set(state => ({
-            departments: state.departments.map(d => d.id === id ? { ...d, ...updates } : d)
-          }))
+          set((state) => ({
+            departments: state.departments.map((d) =>
+              d.id === id ? { ...d, ...updates } : d,
+            ),
+          }));
         }
       },
 
       deleteDepartment: async (id) => {
-        const token = localStorage.getItem("token")
-        const res = await fetch(`http://localhost:5000/api/departments/${id}`, {
+        const token = localStorage.getItem("token");
+
+        // `http://localhost:5000/api/departments/${id}`
+        const res = await fetch(`${getApiBase()}/departments/${id}`, {
           method: "DELETE",
-          headers: { Authorization: `Bearer ${token || ""}` }
-        })
+          headers: { Authorization: `Bearer ${token || ""}` },
+        });
         if (res.ok) {
-          set(state => ({ departments: state.departments.filter(d => d.id !== id) }))
+          set((state) => ({
+            departments: state.departments.filter((d) => d.id !== id),
+          }));
         }
       },
 
@@ -436,38 +488,40 @@ export const useStore = create<AppState>()(
         const newAbsence = {
           ...absence,
           id: Date.now().toString(),
-        }
+        };
         set((state) => ({
           absences: [...state.absences, newAbsence],
-        }))
+        }));
       },
       updateAbsence: (id, updates) => {
         set((state) => ({
-          absences: state.absences.map((abs) => (abs.id === id ? { ...abs, ...updates } : abs)),
-        }))
+          absences: state.absences.map((abs) =>
+            abs.id === id ? { ...abs, ...updates } : abs,
+          ),
+        }));
       },
       deleteAbsence: (id) => {
         set((state) => ({
           absences: state.absences.filter((abs) => abs.id !== id),
-        }))
+        }));
       },
       getAbsencesByEmployeeId: (employeeId) => {
-        return get().absences.filter((abs) => abs.employeeId === employeeId)
+        return get().absences.filter((abs) => abs.employeeId === employeeId);
       },
       getMonthlyAbsencesCount: (employeeId) => {
-        const now = new Date()
-        const currentMonth = now.getMonth()
-        const currentYear = now.getFullYear()
+        const now = new Date();
+        const currentMonth = now.getMonth();
+        const currentYear = now.getFullYear();
         return get()
           .absences.filter((abs) => {
-            const absDate = new Date(abs.date)
+            const absDate = new Date(abs.date);
             return (
               abs.employeeId === employeeId &&
               absDate.getMonth() === currentMonth &&
               absDate.getFullYear() === currentYear
-            )
+            );
           })
-          .reduce((total, abs) => total + abs.duration, 0)
+          .reduce((total, abs) => total + abs.duration, 0);
       },
 
       payments: initialPayments,
@@ -475,23 +529,25 @@ export const useStore = create<AppState>()(
         const newPayment = {
           ...payment,
           id: Date.now().toString(),
-        }
+        };
         set((state) => ({
           payments: [...state.payments, newPayment],
-        }))
+        }));
       },
       updatePayment: (id, updates) => {
         set((state) => ({
-          payments: state.payments.map((pay) => (pay.id === id ? { ...pay, ...updates } : pay)),
-        }))
+          payments: state.payments.map((pay) =>
+            pay.id === id ? { ...pay, ...updates } : pay,
+          ),
+        }));
       },
       deletePayment: (id) => {
         set((state) => ({
           payments: state.payments.filter((pay) => pay.id !== id),
-        }))
+        }));
       },
       getPaymentsByEmployeeId: (employeeId) => {
-        return get().payments.filter((pay) => pay.employeeId === employeeId)
+        return get().payments.filter((pay) => pay.employeeId === employeeId);
       },
 
       bonuses: initialBonuses,
@@ -499,23 +555,25 @@ export const useStore = create<AppState>()(
         const newBonus = {
           ...bonus,
           id: Date.now().toString(),
-        }
+        };
         set((state) => ({
           bonuses: [...state.bonuses, newBonus],
-        }))
+        }));
       },
       updateBonus: (id, updates) => {
         set((state) => ({
-          bonuses: state.bonuses.map((bon) => (bon.id === id ? { ...bon, ...updates } : bon)),
-        }))
+          bonuses: state.bonuses.map((bon) =>
+            bon.id === id ? { ...bon, ...updates } : bon,
+          ),
+        }));
       },
       deleteBonus: (id) => {
         set((state) => ({
           bonuses: state.bonuses.filter((bon) => bon.id !== id),
-        }))
+        }));
       },
       getBonusesByEmployeeId: (employeeId) => {
-        return get().bonuses.filter((bon) => bon.employeeId === employeeId)
+        return get().bonuses.filter((bon) => bon.employeeId === employeeId);
       },
 
       leaves: initialLeaves,
@@ -523,62 +581,72 @@ export const useStore = create<AppState>()(
         const newLeave = {
           ...leave,
           id: Date.now().toString(),
-        }
+        };
         set((state) => ({
           leaves: [...state.leaves, newLeave],
-        }))
-        const today = new Date()
-        const startDate = new Date(leave.startDate)
-        const endDate = new Date(leave.endDate)
-        if (leave.status === "Approved" && today >= startDate && today <= endDate) {
-          get().updateEmployee(leave.employeeId, { status: "Inactive" })
+        }));
+        const today = new Date();
+        const startDate = new Date(leave.startDate);
+        const endDate = new Date(leave.endDate);
+        if (
+          leave.status === "Approved" &&
+          today >= startDate &&
+          today <= endDate
+        ) {
+          get().updateEmployee(leave.employeeId, { status: "Inactive" });
         }
       },
       updateLeave: (id, updates) => {
         set((state) => ({
-          leaves: state.leaves.map((leave) => (leave.id === id ? { ...leave, ...updates } : leave)),
-        }))
-        const leave = get().leaves.find((l) => l.id === id)
+          leaves: state.leaves.map((leave) =>
+            leave.id === id ? { ...leave, ...updates } : leave,
+          ),
+        }));
+        const leave = get().leaves.find((l) => l.id === id);
         if (leave) {
-          const updatedLeave = { ...leave, ...updates }
-          const today = new Date()
-          const startDate = new Date(updatedLeave.startDate)
-          const endDate = new Date(updatedLeave.endDate)
-          if (updatedLeave.status === "Approved" && today >= startDate && today <= endDate) {
-            get().updateEmployee(leave.employeeId, { status: "Inactive" })
+          const updatedLeave = { ...leave, ...updates };
+          const today = new Date();
+          const startDate = new Date(updatedLeave.startDate);
+          const endDate = new Date(updatedLeave.endDate);
+          if (
+            updatedLeave.status === "Approved" &&
+            today >= startDate &&
+            today <= endDate
+          ) {
+            get().updateEmployee(leave.employeeId, { status: "Inactive" });
           } else if (!get().hasActiveLeave(leave.employeeId)) {
-            get().updateEmployee(leave.employeeId, { status: "Active" })
+            get().updateEmployee(leave.employeeId, { status: "Active" });
           }
         }
       },
       deleteLeave: (id) => {
-        const leave = get().leaves.find((l) => l.id === id)
+        const leave = get().leaves.find((l) => l.id === id);
         set((state) => ({
           leaves: state.leaves.filter((leave) => leave.id !== id),
-        }))
+        }));
         if (leave && !get().hasActiveLeave(leave.employeeId)) {
-          get().updateEmployee(leave.employeeId, { status: "Active" })
+          get().updateEmployee(leave.employeeId, { status: "Active" });
         }
       },
       getLeavesByEmployeeId: (employeeId) => {
-        return get().leaves.filter((leave) => leave.employeeId === employeeId)
+        return get().leaves.filter((leave) => leave.employeeId === employeeId);
       },
       hasActiveLeave: (employeeId) => {
-        const today = new Date()
+        const today = new Date();
         return get().leaves.some((leave) => {
-          const startDate = new Date(leave.startDate)
-          const endDate = new Date(leave.endDate)
+          const startDate = new Date(leave.startDate);
+          const endDate = new Date(leave.endDate);
           return (
             leave.employeeId === employeeId &&
             leave.status === "Approved" &&
             today >= startDate &&
             today <= endDate
-          )
-        })
+          );
+        });
       },
     }),
     {
       name: "employee-management-storage",
     },
   ),
-)
+);

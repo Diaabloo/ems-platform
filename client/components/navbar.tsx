@@ -1,10 +1,10 @@
-"use client"
+"use client";
 
-import { Bell, Search } from "lucide-react"
-import { useStore } from "@/lib/store"
+import { Bell, Search } from "lucide-react";
+import { useStore } from "@/lib/store";
 
 export function Navbar() {
-  const user = useStore((state) => state.user)
+  const user = useStore((state) => state.user);
 
   return (
     <div className="flex h-16 items-center justify-between border-b border-border bg-card px-6">
@@ -29,14 +29,20 @@ export function Navbar() {
 
         <div className="flex items-center gap-3">
           <div className="h-8 w-8 rounded-full bg-primary/20 flex items-center justify-center">
-            <span className="text-sm font-medium text-primary">{user?.fullName?.charAt(0) || "A"}</span>
+            <span className="text-sm font-medium text-primary">
+              {user?.fullName?.charAt(0) || "A"}
+            </span>
           </div>
           <div className="text-sm">
-            <div className="font-medium text-foreground">{user?.fullName || "Admin User"}</div>
-            <div className="text-muted-foreground">{user?.email || "admin@company.com"}</div>
+            <div className="font-medium text-foreground">
+              {user?.fullName || "Admin User"}
+            </div>
+            <div className="text-muted-foreground">
+              {user?.email || "admin@company.com"}
+            </div>
           </div>
         </div>
       </div>
     </div>
-  )
+  );
 }

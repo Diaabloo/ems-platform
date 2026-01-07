@@ -4,18 +4,25 @@
   "description": "",
   "main": "index.js",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1",
+    "test": "jest --runInBand",
+    "test:watch": "cross-env NODE_OPTIONS=--experimental-vm-modules jest --watch",
+    "test:ci": "jest --runInBand --coverage --coverageReporters=cobertura --coverageReporters=html --coverageReporters=text --reporters=default --reporters=jest-junit --testResultsProcessor=jest-junit",
+    "test:integration": "cross-env NODE_OPTIONS=--experimental-vm-modules jest --testPathPattern=integration --coverage --passWithNoTests",
     "start": "node index.js",
     "dev": "nodemon index.js",
+    "migrate": "prisma migrate deploy",
     "import:employees": "tsx scripts/import-employees.ts",
-    "backup": "pg_dump -h localhost -p 5432 -U postgres -d employeedb > C:\\Users\\XPS\\Desktop\\AGE\\backups\\full_backup_$(date +%Y-%m-%d).sql"
+    "backup": "pg_dump -h localhost -p 5432 -U postgres -d employeedb > C:\\Users\\XPS\\Desktop\\AGE\\backups\\full_backup_$(date +%Y-%m-%d).sql",
+    "lint": "eslint src/ --ext .js,.jsx,.ts,.tsx",
+    "lint:fix": "eslint src/ --ext .js,.jsx,.ts,.tsx --fix",
+    "type-check": "tsc --noEmit --skipLibCheck"
   },
   "keywords": [],
   "author": "",
   "license": "ISC",
   "type": "module",
   "dependencies": {
-    "@prisma/client": "^6.17.1",
+    "@prisma/client": "6.18.0",
     "@types/express": "^5.0.3",
     "@types/pg": "^8.15.5",
     "bcrypt": "^6.0.0",
@@ -23,15 +30,28 @@
     "csv-parser": "^3.2.0",
     "dotenv": "^17.2.3",
     "express": "^5.1.0",
+    "globals": "^16.5.0",
     "jsonwebtoken": "^9.0.2",
     "nodemailer": "^7.0.9",
     "pg": "^8.16.3",
-    "ts-node": "^10.9.2",
-    "typescript": "^5.9.3"
+    "ts-node": "^10.9.2"
   },
   "devDependencies": {
+    "@eslint/js": "^9.39.1",
+    "@types/jest": "^30.0.0",
+    "@typescript-eslint/eslint-plugin": "^8.48.0",
+    "@typescript-eslint/parser": "^8.48.0",
+    "cross-env": "^10.1.0",
+    "eslint": "^9.39.1",
+    "eslint-config-prettier": "^10.1.8",
+    "jest": "^30.2.0",
+    "jest-junit": "^16.0.0",
     "nodemon": "^3.1.10",
-    "prisma": "^6.17.1",
-    "tsx": "^4.20.6"
+    "prettier": "^3.7.1",
+    "prisma": "6.18.0",
+    "ts-jest": "^29.4.5",
+    "tsx": "^4.20.6",
+    "typescript": "^5.9.3",
+    "typescript-eslint": "^8.48.0"
   }
 }
