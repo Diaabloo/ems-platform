@@ -545,61 +545,38 @@ trivy_filesystem_scan:
 
 dependency_check_scan:
   stage: security
-  image: owasp/dependency-check:latest
-  
+  image: 
+    name: owasp/dependency-check:latest
+    entrypoint: [""] 
   variables:
-    DC_OPTS: "--enableExperimental --disableYarnAudit"
-  
+    DC_OPTS: "--enableExperimental --format JSON --format HTML --prettyPrint"
   script:
     - |
       echo "🔍 Running OWASP Dependency-Check..."
-      mkdir -p artifacts reports
-      
-      # Scan du frontend (Node.js)
-      echo "📦 Scanning Frontend dependencies..."
+      mkdir -p reports artifacts
+      echo "📦 Scanning all dependencies (Backend & Frontend)..."
       /usr/share/dependency-check/bin/dependency-check.sh \
-        --project "EMS Platform - Frontend" \
+        --project "EMS-Platform" \
+        --scan ./backend \
         --scan ./client \
         --out reports \
-        --format JSON \
-        --format HTML \
-        --suppression dependency-check-suppressions.xml \
-        --prettyPrint \
         $DC_OPTS || true
       
-      # Scan du backend (Node.js)
-      echo "📦 Scanning Backend dependencies..."
-      /usr/share/dependency-check/bin/dependency-check.sh \
-        --project "EMS Platform - Backend" \
-        --scan ./backend \
-        --out reports \
-        --format JSON \
-        --format HTML \
-        --suppression dependency-check-suppressions.xml \
-        --prettyPrint \
-        $DC_OPTS || true
-      
-      # Copier les rapports dans artifacts/
-      cp reports/dependency-check-report.json artifacts/dependency-check-report.json || true
-      cp reports/dependency-check-report.html artifacts/dependency-check-report.html || true
-      
-      echo "✅ Dependency-Check scan completed"
-  
+      # Vérification de la présence du fichier
+      if [ -f "reports/dependency-check-report.json" ]; then
+        cp reports/dependency-check-report.json artifacts/
+        cp reports/dependency-check-report.html artifacts/
+        echo "✅ Reports copied to artifacts"
+      else
+        echo "⚠️ Warning: No report files found!"
+        ls -R reports/
+      fi
   artifacts:
+    when: always
     paths:
-      - artifacts/dependency-check-report.json
-      - artifacts/dependency-check-report.html
+      - artifacts/
       - reports/
     expire_in: 1 week
-    when: always
-  
-  rules:
-    - if: '$CI_COMMIT_REF_NAME == "dev" || $CI_COMMIT_REF_NAME == "main"'
-  
-  allow_failure: true  
-  
-  timeout: 20 minutes  
-  
   tags:
     - linux
     - docker
