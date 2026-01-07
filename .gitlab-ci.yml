@@ -543,6 +543,68 @@ trivy_filesystem_scan:
     - if: '$CI_COMMIT_REF_NAME == "dev" || $CI_COMMIT_REF_NAME == "main"'
   allow_failure: true
 
+dependency_check_scan:
+  stage: security
+  image: owasp/dependency-check:latest
+  
+  variables:
+    DC_OPTS: "--enableExperimental --disableYarnAudit"
+  
+  script:
+    - |
+      echo "🔍 Running OWASP Dependency-Check..."
+      mkdir -p artifacts reports
+      
+      # Scan du frontend (Node.js)
+      echo "📦 Scanning Frontend dependencies..."
+      /usr/share/dependency-check/bin/dependency-check.sh \
+        --project "EMS Platform - Frontend" \
+        --scan ./client \
+        --out reports \
+        --format JSON \
+        --format HTML \
+        --suppression dependency-check-suppressions.xml \
+        --prettyPrint \
+        $DC_OPTS || true
+      
+      # Scan du backend (Node.js)
+      echo "📦 Scanning Backend dependencies..."
+      /usr/share/dependency-check/bin/dependency-check.sh \
+        --project "EMS Platform - Backend" \
+        --scan ./backend \
+        --out reports \
+        --format JSON \
+        --format HTML \
+        --suppression dependency-check-suppressions.xml \
+        --prettyPrint \
+        $DC_OPTS || true
+      
+      # Copier les rapports dans artifacts/
+      cp reports/dependency-check-report.json artifacts/dependency-check-report.json || true
+      cp reports/dependency-check-report.html artifacts/dependency-check-report.html || true
+      
+      echo "✅ Dependency-Check scan completed"
+  
+  artifacts:
+    paths:
+      - artifacts/dependency-check-report.json
+      - artifacts/dependency-check-report.html
+      - reports/
+    expire_in: 1 week
+    when: always
+  
+  rules:
+    - if: '$CI_COMMIT_REF_NAME == "dev" || $CI_COMMIT_REF_NAME == "main"'
+  
+  allow_failure: true  
+  
+  timeout: 20 minutes  
+  
+  tags:
+    - linux
+    - docker
+    - ems-platform
+
 # ========================================
 # STAGE 4: TEST
 # Unit and integration tests with coverage
@@ -1279,6 +1341,7 @@ upload_to_defectdojo:
     - trivy_scan_frontend
     - trivy_scan_backend
     - trivy_scan_db
+    - dependency_check_scan
 
   script:
     - |
@@ -1349,6 +1412,7 @@ upload_to_defectdojo:
       upload artifacts/trivy-frontend-scan.json "Trivy Scan"
       upload artifacts/trivy-backend-scan.json "Trivy Scan"
       upload artifacts/trivy-db-scan.json "Trivy Scan"
+      upload artifacts/dependency-check-report.json "Dependency Check Scan" 
 
       # Fermer l'engagement
       echo "✅ Closing engagement..."
