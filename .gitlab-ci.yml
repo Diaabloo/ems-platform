@@ -1095,44 +1095,37 @@ push_images:
 update_manifests:
   stage: gitops
   image: alpine:latest
-
   needs:
     - push_images
-
   before_script:
     - echo "🔧 Setting up GitOps environment..."
     - apk add --no-cache git openssh-client bash wget
-    - >-
-      wget
-      https://github.com/mikefarah/yq/releases/download/v4.40.5/yq_linux_amd64
-      -O /usr/bin/yq
+    # Installation de yq
+    - wget https://github.com/mikefarah/yq/releases/download/v4.40.5/yq_linux_amd64 -O /usr/bin/yq
     - chmod +x /usr/bin/yq
-    - yq --version
-    - mkdir -p ~/.ssh
-    - chmod 700 ~/.ssh
-    - echo "$GITOPS_DEPLOY_KEY" | tr -d '\r' > ~/.ssh/id_rsa
+    # Configuration SSH (Méthode Base64)
+    - mkdir -p ~/.ssh && chmod 700 ~/.ssh
+    - echo "$GITOPS_DEPLOY_KEY" | base64 -d > ~/.ssh/id_rsa
     - chmod 600 ~/.ssh/id_rsa
-    - ssh-keyscan -t rsa gitlab.com >> ~/.ssh/known_hosts
-    - chmod 644 ~/.ssh/known_hosts
+    - ssh-keyscan -H gitlab.com >> ~/.ssh/known_hosts
+    # Configuration Git
     - git config --global user.email "ci@ems-platform.com"
     - git config --global user.name "GitLab CI Bot"
-    - >-
-      git config --global core.sshCommand
-      "ssh -i ~/.ssh/id_rsa -o StrictHostKeyChecking=no"
-
   script:
     - |
       echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
       echo "🔄 GITOPS: Updating Kubernetes Manifests"
       echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 
+      # Définition de l'overlay et du tag
       if [ "$CI_COMMIT_REF_NAME" = "main" ]; then
         OVERLAY="prod"
         IMAGE_TAG="latest"
         echo "🚀 Environment: PRODUCTION"
       else
         OVERLAY="dev"
-        IMAGE_TAG="$COMMIT_TAG"
+        # Utilise le SHA court si COMMIT_TAG est vide
+        IMAGE_TAG="${COMMIT_TAG:-sha-${CI_COMMIT_SHORT_SHA}}"
         echo "🛠️  Environment: DEVELOPMENT"
       fi
 
@@ -1152,68 +1145,30 @@ update_manifests:
       fi
 
       echo ""
-      echo "🔍 Current image tags:"
-      yq eval '.images[] | .name + " → " + .newTag' "$KUSTOMIZE_FILE"
-
-      echo ""
-      echo "✏️  Updating image tags to: $IMAGE_TAG"
-      yq eval ".images[0].newTag = \"$IMAGE_TAG\"" -i "$KUSTOMIZE_FILE"
-      yq eval ".images[1].newTag = \"$IMAGE_TAG\"" -i "$KUSTOMIZE_FILE"
-      yq eval ".images[2].newTag = \"$IMAGE_TAG\"" -i "$KUSTOMIZE_FILE"
-
-      echo ""
-      echo "✅ New image tags:"
-      yq eval '.images[] | .name + " → " + .newTag' "$KUSTOMIZE_FILE"
+      echo "✏️  Updating image tags in $KUSTOMIZE_FILE..."
+      # On met à jour les tags pour les 3 images
+      yq eval ".images[] |= select(.name == \"backend-image\").newTag = \"$IMAGE_TAG\"" -i "$KUSTOMIZE_FILE"
+      yq eval ".images[] |= select(.name == \"frontend-image\").newTag = \"$IMAGE_TAG\"" -i "$KUSTOMIZE_FILE"
+      yq eval ".images[] |= select(.name == \"database-image\").newTag = \"$IMAGE_TAG\"" -i "$KUSTOMIZE_FILE"
 
       if git diff --quiet "$KUSTOMIZE_FILE"; then
-        echo ""
         echo "ℹ️  No changes detected - images already up to date"
         exit 0
       fi
 
-      echo ""
-      echo "📝 Changes to be committed:"
-      git diff "$KUSTOMIZE_FILE"
-
-      echo ""
-      echo "📤 Committing changes..."
+      echo "📤 Committing and Pushing changes..."
       git add "$KUSTOMIZE_FILE"
-
-      git commit -m "🚀 Deploy $OVERLAY: Update images to $IMAGE_TAG
-
-      Pipeline: $CI_PIPELINE_URL
-      Commit: $CI_COMMIT_SHORT_SHA
-      Branch: $CI_COMMIT_REF_NAME
-      Job: $CI_JOB_ID
-      Triggered by: $GITLAB_USER_LOGIN
-
-      Images updated:
-      - backend-image → amineelalami/ems-platform-backend:$IMAGE_TAG
-      - frontend-image → amineelalami/ems-platform-frontend:$IMAGE_TAG
-      - database-image → amineelalami/ems-platform-db:$IMAGE_TAG"
-
-      echo ""
-      echo "⬆️  Pushing to remote repository..."
+      git commit -m "🚀 Deploy $OVERLAY: Update images to $IMAGE_TAG [skip ci]"
+      
+      # On push sur la branche main du repo GitOps
       git push origin main
 
-      echo ""
-      echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
       echo "✅ GitOps manifests updated successfully!"
-      echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-      echo "🔍 ArgoCD will detect changes and sync automatically (~3 min)"
-      echo "📊 Monitor deployment:"
-      echo "   kubectl get applications -n argocd"
-      echo "   kubectl get pods -n ems-platform -w"
-      echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-
   rules:
     - if: '$CI_COMMIT_REF_NAME == "dev"'
       when: on_success
     - if: '$CI_COMMIT_REF_NAME == "main"'
       when: manual
-
-  allow_failure: false
-
   tags:
     - linux
     - docker
