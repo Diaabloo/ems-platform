@@ -3,7 +3,7 @@
 # ========================================
 
 stages:
-  - secrets # Secret Scanning
+  - secrets  # Secret Scanning
   - setup  # Dependency installation & caching
   - quality  # Code quality checks (ESLint, Prettier)
   - security  # Security audits & vulnerability scanning
@@ -13,6 +13,7 @@ stages:
   - image_scan  # Container security scanning
   - infrastructure  # Kubernetes manifest validation
   - gitops  # Deployment to K8s cluster
+  - reporting  #defectdojo
 
 # ========================================
 # Global Variables
@@ -172,10 +173,14 @@ variables:
 
 gitleaks_scan:
   stage: secrets
-  image: zricethezav/gitleaks:latest
+  image: 
+    name: zricethezav/gitleaks:latest
+    entrypoint: [""]  
+  
   before_script:
     - echo "🔐 GitLeaks Secret Scanner Setup"
     - gitleaks version
+  
   script:
     - |
       echo "🔍 Scanning repository for exposed secrets..."
@@ -206,15 +211,19 @@ gitleaks_scan:
       fi
 
       echo "✅ GitLeaks scan completed"
+  
   artifacts:
     paths:
       - artifacts/gitleaks-report.json
       - artifacts/gitleaks-report.sarif
     expire_in: 1 week
     when: always
+  
   rules:
     - if: '$CI_COMMIT_REF_NAME == "dev" || $CI_COMMIT_REF_NAME == "main"'
+  
   allow_failure: true
+  
   tags:
     - linux
     - docker
@@ -1100,7 +1109,7 @@ push_images:
       echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
   rules:
     - if: '$CI_COMMIT_REF_NAME == "dev" || $CI_COMMIT_REF_NAME == "main"'
-  timeout: 15 minutes
+  timeout: 55 minutes
   tags:
     - linux
     - docker
@@ -1319,6 +1328,119 @@ cleanup:
     - docker
     - ems-platform
 
+# ========================================
+# STAGE 10: REPORTING
+# Upload scan results to DefectDojo
+# ========================================
+
+upload_to_defectdojo:
+  stage: reporting
+  image: alpine:latest
+
+  before_script:
+    - echo "🔧 Installing dependencies..."
+    - apk add --no-cache curl jq  # ✅ curl + jq
+
+  dependencies:
+    - gitleaks_scan
+    - trivy_filesystem_scan
+    - trivy_scan_frontend
+    - trivy_scan_backend
+    - trivy_scan_db
+
+  script:
+    - |
+      echo "📤 Uploading security reports to DefectDojo..."
+      echo "🔗 DefectDojo URL: ${DEFECTDOJO_URL}"
+
+      TODAY=$(date +%Y-%m-%d)
+
+      # Créer un engagement
+      echo "📋 Creating engagement..."
+      ENGAGEMENT_RESPONSE=$(curl -s -w "\n%{http_code}" -X POST \
+        "${DEFECTDOJO_URL}/api/v2/engagements/" \
+        -H "Authorization: Token ${DEFECTDOJO_TOKEN}" \
+        -H "Content-Type: application/json" \
+        -d "{
+          \"name\": \"Pipeline #${CI_PIPELINE_ID} (${CI_COMMIT_REF_NAME})\",
+          \"description\": \"Automated GitLab CI scan\",
+          \"product\": 1,
+          \"target_start\": \"${TODAY}\",
+          \"target_end\": \"${TODAY}\",
+          \"status\": \"In Progress\"
+        }")
+
+      HTTP_CODE=$(echo "$ENGAGEMENT_RESPONSE" | tail -n1)
+      BODY=$(echo "$ENGAGEMENT_RESPONSE" | sed '$d')
+
+      if [ "$HTTP_CODE" != "201" ]; then
+        echo "❌ Failed to create engagement (HTTP $HTTP_CODE)"
+        echo "Response: $BODY"
+        exit 1
+      fi
+
+      ENGAGEMENT_ID=$(echo "$BODY" | jq -r '.id')
+      echo "✅ Engagement created: ID=${ENGAGEMENT_ID}"
+
+      # Fonction d'upload
+      upload() {
+        FILE=$1
+        TYPE=$2
+
+        if [ ! -f "$FILE" ]; then
+          echo "⚠️ File not found: $FILE"
+          return
+        fi
+
+        echo "📤 Uploading $FILE ($TYPE)..."
+        RESPONSE=$(curl -s -w "\n%{http_code}" -X POST \
+          "${DEFECTDOJO_URL}/api/v2/import-scan/" \
+          -H "Authorization: Token ${DEFECTDOJO_TOKEN}" \
+          -F "scan_type=${TYPE}" \
+          -F "file=@${FILE}" \
+          -F "engagement=${ENGAGEMENT_ID}" \
+          -F "active=true" \
+          -F "verified=false")
+
+        HTTP_CODE=$(echo "$RESPONSE" | tail -n1)
+
+        if [ "$HTTP_CODE" = "201" ]; then
+          echo "✅ Upload successful"
+        else
+          echo "⚠️ Upload failed (HTTP $HTTP_CODE)"
+        fi
+      }
+
+      # Upload tous les rapports
+      upload artifacts/gitleaks-report.json "Gitleaks Scan"
+      upload artifacts/trivy-fs-scan.json "Trivy Scan"
+      upload artifacts/trivy-frontend-scan.json "Trivy Scan"
+      upload artifacts/trivy-backend-scan.json "Trivy Scan"
+      upload artifacts/trivy-db-scan.json "Trivy Scan"
+
+      # Fermer l'engagement
+      echo "✅ Closing engagement..."
+      curl -s -X PATCH \
+        "${DEFECTDOJO_URL}/api/v2/engagements/${ENGAGEMENT_ID}/" \
+        -H "Authorization: Token ${DEFECTDOJO_TOKEN}" \
+        -H "Content-Type: application/json" \
+        -d '{"status": "Completed"}'
+
+      echo ""
+      echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+      echo "🎉 Reports successfully uploaded to DefectDojo"
+      echo "📊 View: ${DEFECTDOJO_URL}/engagement/${ENGAGEMENT_ID}"
+      echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+
+  rules:
+    - if: '$CI_COMMIT_REF_NAME == "dev" || $CI_COMMIT_REF_NAME == "main"'
+
+  allow_failure: true
+
+  tags:
+    - linux
+    - docker
+    - ems-platform
 
 # ========================================
 # Workflow Rules
