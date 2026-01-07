@@ -991,39 +991,33 @@ trivy_scan_db:
 kube_linter:
   stage: infrastructure
   image: alpine:latest
+  variables:
+    GITOPS_REPO: "git@gitlab.com:amineelalami05/ems-gitops.git"
   before_script:
-    - echo "🔧 Installing kube-linter..."
-    - apk add --no-cache curl tar
-    - >-
-      curl -L
-      https://github.com/stackrox/kube-linter/releases/download/v0.6.8/kube-linter-linux.tar.gz
-      -o kube-linter.tar.gz
+    - apk add --no-cache curl tar git openssh-client
+    # Configuration SSH pour accéder au repo GitOps
+    - mkdir -p ~/.ssh && chmod 700 ~/.ssh
+    - echo "$GITOPS_DEPLOY_KEY" | tr -d '\r' > ~/.ssh/id_rsa && chmod 600 ~/.ssh/id_rsa
+    - ssh-keyscan -t rsa gitlab.com >> ~/.ssh/known_hosts
+    # Installation de kube-linter
+    - curl -L https://github.com/stackrox/kube-linter/releases/download/v0.6.8/kube-linter-linux.tar.gz -o kube-linter.tar.gz
     - tar -xzf kube-linter.tar.gz
-    - chmod +x kube-linter
     - mv kube-linter /usr/local/bin/
-    - kube-linter version
   script:
     - |
-      echo "🔍 Running kube-linter (Best Practices & Security)..."
+      echo "📥 Cloning GitOps repository..."
+      git clone $GITOPS_REPO gitops-infra
+      
+      echo "🔍 Running kube-linter on base manifests..."
       mkdir -p artifacts
-
-      # Run kube-linter analysis
-      echo "📋 Analyzing Kubernetes manifests..."
-      kube-linter lint k8s/ --format sarif >
-        artifacts/kube-linter-report.sarif || true
-
-      kube-linter lint k8s/ \
-        --format plain || true
-
-      echo "✅ kube-linter analysis completed"
+      # Analyse du dossier base qui contient tes YAML
+      kube-linter lint gitops-infra/k8s/base/ --format sarif > artifacts/kube-linter-report.sarif || true
+      kube-linter lint gitops-infra/k8s/base/ --format plain || true
   artifacts:
-    paths:
-      - artifacts/kube-linter-report.sarif
-    expire_in: 1 week
     when: always
+    paths:
+      - artifacts/
   allow_failure: true
-  rules:
-    - if: '$CI_COMMIT_REF_NAME == "dev" || $CI_COMMIT_REF_NAME == "main"'
   tags:
     - linux
     - docker
@@ -1032,30 +1026,24 @@ kube_linter:
 kubeconform_validate:
   stage: infrastructure
   image: alpine:latest
+  variables:
+    GITOPS_REPO: "git@gitlab.com:amineelalami05/ems-gitops.git"
   before_script:
-    - echo "🔧 Installing kubeconform..."
-    - apk add --no-cache curl tar
-    - >-
-      curl -L
-      https://github.com/yannh/kubeconform/releases/download/v0.6.4/kubeconform-linux-amd64.tar.gz
-      -o kubeconform.tar.gz
+    - apk add --no-cache curl tar git openssh-client
+    - mkdir -p ~/.ssh && chmod 700 ~/.ssh
+    - echo "$GITOPS_DEPLOY_KEY" | tr -d '\r' > ~/.ssh/id_rsa && chmod 600 ~/.ssh/id_rsa
+    - ssh-keyscan -t rsa gitlab.com >> ~/.ssh/known_hosts
+    # Installation de kubeconform
+    - curl -L https://github.com/yannh/kubeconform/releases/download/v0.6.4/kubeconform-linux-amd64.tar.gz -o kubeconform.tar.gz
     - tar -xzf kubeconform.tar.gz
-    - chmod +x kubeconform
     - mv kubeconform /usr/local/bin/
   script:
     - |
-      echo "🔍 Validating Against Official Kubernetes Schema..."
-
-      # Run kubeconform validation
-      kubeconform \
-        -schema-location default \
-        -ignore-missing-schemas \
-        -summary \
-        k8s/ || true
-
-      echo "✅ kubeconform validation completed"
-  rules:
-    - if: '$CI_COMMIT_REF_NAME == "dev" || $CI_COMMIT_REF_NAME == "main"'
+      echo "📥 Cloning GitOps repository..."
+      git clone $GITOPS_REPO gitops-infra
+      
+      echo "🔍 Validating K8s Schema..."
+      kubeconform -schema-location default -ignore-missing-schemas -summary gitops-infra/k8s/ || true
   allow_failure: true
   tags:
     - linux
